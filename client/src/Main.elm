@@ -196,7 +196,7 @@ view model =
         [ viewSamples model.samples model.selectedSample
         , viewTests model.tests
         , viewResults model.results
-        , a [ Attrs.href "#", onClick showm ] [ text <| "(" ++ showp ++ " answers)" ]
+        , a [ Attrs.style "font-size" "22px", Attrs.href "#", onClick showm ] [ text <| "(" ++ showp ++ " answers)" ]
         ]
             ++ (if model.answersRevealed == True then
                     [ viewAnswers model.answers ]
@@ -204,6 +204,7 @@ view model =
                 else
                     []
                )
+            ++ [ viewInstructions ]
 
 
 sectionAttrs =
@@ -272,6 +273,35 @@ viewAnswers answers =
                 )
                 (Dict.toList answers)
             )
+        ]
+
+
+viewInstructions =
+    div sectionAttrs
+        [ hr [] []
+        , h1 [] [ text "Instructions" ]
+        , div []
+            [ h2 [] [ text "Goal" ]
+            , p [] [ text "Guess the composition of the 'samples', which are 5-letter strings made of A, B, C, and D" ]
+            ]
+        , div []
+            [ h2 [] [ text "Samples" ]
+            , p [] [ text "The samples are each secret 5-letter strings made of A, B, C, and D.  The samples are named randomly; the name has no relation to their underlying composition!" ]
+            ]
+        , div []
+            [ h2 [] [ text "Tests" ]
+            , ul []
+                [ li [] [ text "A - Number of times A appears at any position in the sample" ]
+                , li [] [ text "AA - Number of times A appears in a set of TWO OR MORE anywhere in the sample" ]
+                , li [] [ text "AB - Number of times AB appears in that order anywhere in the sample" ]
+                , li [] [ text ".AAA. - Number of A's present in the central 3 positions of the string" ]
+                ]
+            ]
+        , div []
+            [ h2 [] [ text "How to play" ]
+            , p [] [ text "Click the sample you want to test, then the test you want to perform on it.  The answer will appear in the 'Results' list" ]
+            , p [] [ text "When you're ready to check your work, click the 'reveal answers' link" ]
+            ]
         ]
 
 
