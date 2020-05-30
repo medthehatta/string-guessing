@@ -272,7 +272,7 @@ viewButton txt buttonStyle signal =
 fetchConstantGame : Cmd Msg
 fetchConstantGame =
     Http.get
-        { url = "http://192.168.0.100:8111/game.json"
+        { url = "game.json"
         , expect = Http.expectJson GotGameState constantGameDecoder
         }
 
