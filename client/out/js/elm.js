@@ -6201,6 +6201,7 @@ var $author$project$Main$initialModel = {
 	measures: $elm$core$Dict$fromList(_List_Nil),
 	money: 0,
 	results: _List_Nil,
+	resultsExpanded: true,
 	samples: _List_Nil,
 	selectedSample: $elm$core$Maybe$Nothing,
 	tests: _List_Nil
@@ -6315,18 +6316,32 @@ var $author$project$Main$update = F2(
 						model,
 						{answersRevealed: true}),
 					$elm$core$Platform$Cmd$none);
-			default:
+			case 'HideAnswers':
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
 						{answersRevealed: false}),
 					$elm$core$Platform$Cmd$none);
+			default:
+				var _v4 = model.resultsExpanded;
+				if (_v4) {
+					return _Utils_Tuple2(
+						_Utils_update(
+							model,
+							{resultsExpanded: false}),
+						$elm$core$Platform$Cmd$none);
+				} else {
+					return _Utils_Tuple2(
+						_Utils_update(
+							model,
+							{resultsExpanded: true}),
+						$elm$core$Platform$Cmd$none);
+				}
 		}
 	});
 var $author$project$Main$HideAnswers = {$: 'HideAnswers'};
 var $author$project$Main$ShowAnswers = {$: 'ShowAnswers'};
 var $elm$html$Html$a = _VirtualDom_node('a');
-var $elm$html$Html$div = _VirtualDom_node('div');
 var $elm$json$Json$Encode$string = _Json_wrap;
 var $elm$html$Html$Attributes$stringProperty = F2(
 	function (key, string) {
@@ -6335,6 +6350,8 @@ var $elm$html$Html$Attributes$stringProperty = F2(
 			key,
 			$elm$json$Json$Encode$string(string));
 	});
+var $elm$html$Html$Attributes$class = $elm$html$Html$Attributes$stringProperty('className');
+var $elm$html$Html$div = _VirtualDom_node('div');
 var $elm$html$Html$Attributes$href = function (url) {
 	return A2(
 		$elm$html$Html$Attributes$stringProperty,
@@ -6358,15 +6375,12 @@ var $elm$html$Html$Events$onClick = function (msg) {
 		'click',
 		$elm$json$Json$Decode$succeed(msg));
 };
-var $elm$virtual_dom$VirtualDom$style = _VirtualDom_style;
-var $elm$html$Html$Attributes$style = $elm$virtual_dom$VirtualDom$style;
 var $elm$virtual_dom$VirtualDom$text = _VirtualDom_text;
 var $elm$html$Html$text = $elm$virtual_dom$VirtualDom$text;
 var $elm$html$Html$h1 = _VirtualDom_node('h1');
 var $author$project$Main$sectionAttrs = _List_fromArray(
 	[
-		A2($elm$html$Html$Attributes$style, 'float', 'left'),
-		A2($elm$html$Html$Attributes$style, 'width', '100%')
+		$elm$html$Html$Attributes$class('section')
 	]);
 var $elm$html$Html$table = _VirtualDom_node('table');
 var $elm$html$Html$td = _VirtualDom_node('td');
@@ -6546,79 +6560,100 @@ var $author$project$Main$viewInstructions = A2(
 					_List_fromArray(
 						[
 							$elm$html$Html$text('When you\'re ready to check your work, click the \'reveal answers\' link')
-						]))
+						])),
+					A2(
+					$elm$html$Html$div,
+					_List_fromArray(
+						[
+							$elm$html$Html$Attributes$class('footer-space')
+						]),
+					_List_Nil)
 				]))
 		]));
+var $author$project$Main$ToggleResults = {$: 'ToggleResults'};
+var $elm$html$Html$Attributes$alt = $elm$html$Html$Attributes$stringProperty('alt');
+var $elm$html$Html$i = _VirtualDom_node('i');
 var $elm$html$Html$ol = _VirtualDom_node('ol');
-var $author$project$Main$viewResults = function (results) {
-	var viewResult = function (_v0) {
-		var sample = _v0.a;
-		var test = _v0.b;
-		var r = _v0.c;
+var $elm$html$Html$span = _VirtualDom_node('span');
+var $elm$virtual_dom$VirtualDom$style = _VirtualDom_style;
+var $elm$html$Html$Attributes$style = $elm$virtual_dom$VirtualDom$style;
+var $author$project$Main$viewResults = F2(
+	function (results, expanded) {
+		var viewResult = function (_v0) {
+			var sample = _v0.a;
+			var test = _v0.b;
+			var r = _v0.c;
+			return A2(
+				$elm$html$Html$li,
+				_List_fromArray(
+					[
+						$elm$html$Html$Attributes$class('outer')
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text(sample.text + (' ' + (test.text + (' = ' + r))))
+					]));
+		};
+		var exStyle = expanded ? {
+			arrowAlt: 'Collapse',
+			arrowClass: 'fas fa-angle-down',
+			disp: A2($elm$html$Html$Attributes$style, 'display', 'block')
+		} : {
+			arrowAlt: 'Expand',
+			arrowClass: 'fas fa-angle-up',
+			disp: A2($elm$html$Html$Attributes$style, 'display', 'none')
+		};
 		return A2(
-			$elm$html$Html$li,
+			$elm$html$Html$div,
 			_List_fromArray(
 				[
-					A2($elm$html$Html$Attributes$style, 'font-size', '24px')
+					$elm$html$Html$Attributes$class('footer')
 				]),
 			_List_fromArray(
 				[
-					$elm$html$Html$text(sample.text + (' ' + (test.text + (' = ' + r))))
+					A2(
+					$elm$html$Html$h1,
+					_List_fromArray(
+						[
+							$elm$html$Html$Events$onClick($author$project$Main$ToggleResults)
+						]),
+					_List_fromArray(
+						[
+							A2(
+							$elm$html$Html$i,
+							_List_fromArray(
+								[
+									$elm$html$Html$Attributes$class(exStyle.arrowClass),
+									$elm$html$Html$Attributes$alt(exStyle.arrowAlt)
+								]),
+							_List_Nil),
+							A2(
+							$elm$html$Html$span,
+							_List_Nil,
+							_List_fromArray(
+								[
+									$elm$html$Html$text('Results')
+								]))
+						])),
+					A2(
+					$elm$html$Html$ol,
+					_List_fromArray(
+						[exStyle.disp]),
+					A2($elm$core$List$map, viewResult, results))
 				]));
-	};
-	return A2(
-		$elm$html$Html$div,
-		$author$project$Main$sectionAttrs,
-		_List_fromArray(
-			[
-				A2(
-				$elm$html$Html$h1,
-				_List_Nil,
-				_List_fromArray(
-					[
-						$elm$html$Html$text('Results')
-					])),
-				A2(
-				$elm$html$Html$ol,
-				_List_Nil,
-				A2($elm$core$List$map, viewResult, results))
-			]));
-};
+	});
 var $author$project$Main$SampleClicked = function (a) {
 	return {$: 'SampleClicked', a: a};
 };
-var $author$project$Main$defaultButtonStyle = function () {
-	var styles = _List_fromArray(
-		[
-			_Utils_Tuple2('display', 'flex'),
-			_Utils_Tuple2('align-items', 'center'),
-			_Utils_Tuple2('justify-content', 'center'),
-			_Utils_Tuple2('width', '150px'),
-			_Utils_Tuple2('height', '150px'),
-			_Utils_Tuple2('line-height', '30px'),
-			_Utils_Tuple2('float', 'left'),
-			_Utils_Tuple2('background', 'lightgray'),
-			_Utils_Tuple2('margin', '2px'),
-			_Utils_Tuple2('text-align', 'center'),
-			_Utils_Tuple2('text-decoration', 'none'),
-			_Utils_Tuple2('font-weight', 'bold'),
-			_Utils_Tuple2('font-family', 'sans'),
-			_Utils_Tuple2('font-size', '24px')
-		]);
-	return A2(
-		$elm$core$List$map,
-		function (_v0) {
-			var x = _v0.a;
-			var y = _v0.b;
-			return A2($elm$html$Html$Attributes$style, x, y);
-		},
-		styles);
-}();
+var $author$project$Main$defaultButtonStyle = _List_fromArray(
+	[
+		$elm$html$Html$Attributes$class('button')
+	]);
 var $author$project$Main$selectedButtonStyle = _Utils_ap(
 	$author$project$Main$defaultButtonStyle,
 	_List_fromArray(
 		[
-			A2($elm$html$Html$Attributes$style, 'border', '4px solid black')
+			$elm$html$Html$Attributes$class('bordered')
 		]));
 var $author$project$Main$viewButton = F3(
 	function (txt, buttonStyle, signal) {
@@ -6644,7 +6679,7 @@ var $author$project$Main$viewButtons = F2(
 			$elm$html$Html$div,
 			_List_fromArray(
 				[
-					A2($elm$html$Html$Attributes$style, 'float', 'left')
+					$elm$html$Html$Attributes$class('section')
 				]),
 			A2(
 				$elm$core$List$map,
@@ -6735,12 +6770,12 @@ var $author$project$Main$view = function (model) {
 				[
 					A2($author$project$Main$viewSamples, model.samples, model.selectedSample),
 					$author$project$Main$viewTests(model.tests),
-					$author$project$Main$viewResults(model.results),
+					A2($author$project$Main$viewResults, model.results, model.resultsExpanded),
 					A2(
 					$elm$html$Html$a,
 					_List_fromArray(
 						[
-							A2($elm$html$Html$Attributes$style, 'font-size', '22px'),
+							$elm$html$Html$Attributes$class('outer'),
 							$elm$html$Html$Attributes$href('#'),
 							$elm$html$Html$Events$onClick(showm)
 						]),
