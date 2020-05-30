@@ -460,28 +460,3 @@ def main(
 
 if __name__ == "__main__":
     main()
-
-
-"""
-ectoplasm
-cold
-heat
-photographable - visible
-photographable - infrared
-"photographable" - radio
-magnetic signature
-audio (waveforms "evps")
-"fog" readings
-footprints
-
-elemental resonance
-emotional resonance
-animal sacrifice
-seance
-hired psychic
-smell
-mirrors
-writing on walls
-portals
-historical data
-"""
