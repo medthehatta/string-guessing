@@ -12,6 +12,7 @@ from functools import reduce
 from types import SimpleNamespace
 from math import log
 import subprocess
+import tempfile
 
 import click
 import diceware
@@ -290,29 +291,53 @@ def game_json(alphabet, length, num_samples):
 
 
 #
+# Harnesses
+#
+
+
+def emit_json(alphabet, length, num_samples, path):
+    game = game_json(alphabet, length, num_samples)
+    with open(path, "w") as f:
+        f.write(json.dumps(game))
+
+
+def prepare_stage(json_path):
+    stage_dir = tempfile.mkdtemp()
+    os.system(f"cp -rv client/out/* {stage_dir}")
+    os.system(f"cp {json_path} {stage_dir}/game.json")
+    return stage_dir
+
+
+#
 # Entry point
 #
 
 
 @click.command()
 @click.option("--series-name")
+@click.option("--output", type=click.File())
 @click.option("--num-games", default=None)
 @click.option("--num-samples", default=5)
 @click.option("--alphabet", default="ABCD")
 @click.option("--length", type=int, default=5)
 @click.option("--upload/--no-upload")
-@click.argument("rootdir")
+@click.option("--rootdir")
 def main(
-    rootdir,
+    rootdir=None,
     series_name=None,
     alphabet='ABCD',
     length=5,
     num_games=None,
     num_samples=5,
+    output_path=None,
     upload=False,
 ):
     rootdir = rootdir.rstrip("/")
-    series_name = series_name or random_words(2)
+
+    if output_path is not None:
+        series_name
+    elif series_name is None:
+        series_name = random_words(2)
 
     if num_games:
         game_names = [random_words(2) for _ in range(num_games)]
