@@ -42,17 +42,6 @@ quickTests num =
     List.map wrap_ (List.map (\x -> "T" ++ String.fromInt x) (List.range 1 num))
 
 
-initialModel =
-    { contracts = []
-    , tests = []
-    , samples = []
-    , results = []
-    , measures = Dict.fromList []
-    , money = 0
-    , selectedSample = Nothing
-    }
-
-
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( initialModel, fetchConstantGame )
@@ -84,7 +73,11 @@ type alias TestResult =
 
 
 type alias GameStateReply =
-    { tests : List Test, samples : List Sample, measures : Dict String (Dict String Int) }
+    { tests : List Test
+    , samples : List Sample
+    , measures : Dict String (Dict String Int)
+    , answers : Dict String String
+    }
 
 
 type alias Model =
@@ -93,8 +86,23 @@ type alias Model =
     , samples : List Sample
     , results : List ( Sample, Test, TestResult )
     , measures : Dict String (Dict String Int)
+    , answers : Dict String String
+    , answersRevealed : Bool
     , money : Int
     , selectedSample : Maybe Sample
+    }
+
+
+initialModel =
+    { contracts = []
+    , tests = []
+    , samples = []
+    , results = []
+    , measures = Dict.fromList []
+    , answers = Dict.fromList []
+    , answersRevealed = False
+    , money = 0
+    , selectedSample = Nothing
     }
 
 
@@ -103,6 +111,8 @@ type Msg
     | SampleClicked Sample
     | TestClicked Test
     | GotGameState (Result Http.Error GameStateReply)
+    | ShowAnswers
+    | HideAnswers
 
 
 
@@ -148,11 +158,17 @@ update msg model =
 
         GotGameState s ->
             case s of
-                Ok { tests, samples, measures } ->
-                    ( { model | tests = tests, samples = samples, measures = measures }, Cmd.none )
+                Ok { tests, samples, measures, answers } ->
+                    ( { model | tests = tests, samples = samples, measures = measures, answers = answers }, Cmd.none )
 
                 Err e ->
                     ( model, Cmd.none )
+
+        ShowAnswers ->
+            ( { model | answersRevealed = True }, Cmd.none )
+
+        HideAnswers ->
+            ( { model | answersRevealed = False }, Cmd.none )
 
 
 
@@ -161,11 +177,17 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    div []
+    div [] <|
         [ viewSamples model.samples model.selectedSample
         , viewTests model.tests
         , viewResults model.results
         ]
+            ++ (if model.answersRevealed == True then
+                    [ viewAnswers model.answers ]
+
+                else
+                    []
+               )
 
 
 sectionAttrs =
@@ -221,6 +243,21 @@ viewResults results =
                 )
                 results
             )
+        , a [ Attrs.href "#", onClick ShowAnswers ] [ text "(reveal answers)" ]
+        ]
+
+
+viewAnswers answers =
+    div sectionAttrs
+        [ h1 [] [ text "Answers" ]
+        , table []
+            (List.map
+                (\( name, answer ) ->
+                    tr [] [ td [] [ text name ], td [] [ text answer ] ]
+                )
+                (Dict.toList answers)
+            )
+        , a [ Attrs.href "#", onClick HideAnswers ] [ text "(hide answers)" ]
         ]
 
 
@@ -294,8 +331,9 @@ constantGameDecoder =
                 D.string
                 D.string
     in
-    D.map3
-        (\x -> \y -> \z -> { tests = x, samples = y, measures = z })
+    D.map4
+        (\x -> \y -> \z -> \w -> { tests = x, samples = y, measures = z, answers = w })
         (D.at [ "tests" ] (D.list nameToTest))
         (D.at [ "samples" ] (D.list nameToSample))
         (D.at [ "measures" ] (D.dict (D.dict D.int)))
+        (D.at [ "answers" ] (D.dict D.string))
