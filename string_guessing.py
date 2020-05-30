@@ -419,12 +419,6 @@ def game_json(alphabet, length, num_samples):
         "answers": qs,
         "measures": ms,
     }
-    with open("/tmp/game.json", "w") as f:
-        try:
-            f.write(json.dumps(data))
-        except Exception:
-            import pdb; pdb.set_trace()
-            print("wtf")
     return data
 
 
