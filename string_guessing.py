@@ -6,13 +6,13 @@ import json
 import os
 import random
 import re
+import subprocess
+import tempfile
 from collections import Counter
 from collections import defaultdict
 from functools import reduce
-from types import SimpleNamespace
 from math import log
-import subprocess
-import tempfile
+from types import SimpleNamespace
 
 import click
 import diceware
@@ -35,22 +35,18 @@ SEQUENCE_LENGTH = 5
 
 
 class Seqs:
-
     def __init__(self, alphabet, length):
         self.alphabet = alphabet
         self.length = length
 
     def make(self):
-        return "".join(
-            random.choice(self.alphabet)
-            for _ in range(self.length)
-        ).upper()
+        return "".join(random.choice(self.alphabet) for _ in range(self.length)).upper()
 
     def hist(self, *funcs):
         alphabet = self.alphabet
         length = self.length
-        seqs = ("".join(p) for p in itertools.product(*[alphabet]*length))
-        num = len(alphabet)**length
+        seqs = ("".join(p) for p in itertools.product(*[alphabet] * length))
+        num = len(alphabet) ** length
         f = juxt(*funcs)
         counts = Counter(f(seq) for seq in seqs)
         return {k: v / num for (k, v) in counts.items()}
@@ -58,12 +54,12 @@ class Seqs:
     def value(self, *funcs):
         restriction = self.hist(*funcs).values()
         log_geo_avg = sum(-log(r) for r in restriction) / len(restriction)
-        return round(10*log_geo_avg)
+        return round(10 * log_geo_avg)
 
     def compare_values(self, *funcs):
         vals_each = [self.value(func) for func in funcs]
         vals_together = self.value(*funcs)
-        efficiency = vals_together/sum(vals_each)
+        efficiency = vals_together / sum(vals_each)
         return {
             "each": vals_each,
             "together": vals_together,
@@ -80,10 +76,13 @@ def flatten_list(seq):
 
 
 def random_word():
-    return subprocess.check_output(
-        f"sort -R {diceware.get_wordlist_path('en')} | head -n1",
-        shell=True,
-    ).decode("utf-8").strip()
+    return (
+        subprocess.check_output(
+            f"sort -R {diceware.get_wordlist_path('en')} | head -n1", shell=True,
+        )
+        .decode("utf-8")
+        .strip()
+    )
 
 
 def random_words(num):
@@ -218,7 +217,8 @@ def at_positions(positions, char, seq):
 
 
 def price_chart(seqs):
-    print(f"""
+    print(
+        f"""
 A1 ... {seqs.value(at_positions([0], "A"))}
 A2 ... {seqs.value(at_positions([0, 1], "A"))}
 A3 ... {seqs.value(at_positions([0, 1, 2], "A"))}
@@ -226,7 +226,7 @@ AB ... {seqs.value(count_of("AB"))}
 AA ... {seqs.value(count_of("AA"))}
 A  ... {seqs.value(count_of("A"))}
 """
-)
+    )
 
 
 def posc(length, positions, char):
@@ -238,13 +238,12 @@ def posc(length, positions, char):
 
 @curry
 def sweep_offsets(kernel, max_):
-
     def _componentwise(f, a, b):
         return [f(*ab) for ab in zip(a, b)]
 
     klen = len(kernel)
     gen = (
-        _componentwise(lambda x, y: x + y, kernel, [i]*klen)
+        _componentwise(lambda x, y: x + y, kernel, [i] * klen)
         for i in itertools.count()
     )
     return list(itertools.takewhile(lambda x: x[-1] <= max_, gen))
@@ -253,14 +252,11 @@ def sweep_offsets(kernel, max_):
 def measurements(x, seqs):
     alphabet = seqs.alphabet
     length = seqs.length
-    sweep = sweep_offsets(max_=length-1)
+    sweep = sweep_offsets(max_=length - 1)
 
-    tri_positions = flatten_list([
-        sweep([0, 1, 2]),
-        sweep([0, 2, 4]),
-        sweep([0, 3, 4]),
-        [[0, length//2, -1]],
-    ])
+    tri_positions = flatten_list(
+        [sweep([0, 1, 2]), sweep([0, 2, 4]), sweep([0, 3, 4]), [[0, length // 2, -1]],]
+    )
 
     res = {}
 
@@ -295,16 +291,17 @@ def game_json(alphabet, length, num_samples):
 #
 
 
-def emit_json(alphabet, length, num_samples, path):
+def emit_json(alphabet, length, num_samples, json_file):
     game = game_json(alphabet, length, num_samples)
-    with open(path, "w") as f:
-        f.write(json.dumps(game))
+    json_file.write(json.dumps(game))
 
 
-def prepare_stage(json_path):
+def prepare_stage(json_data):
     stage_dir = tempfile.mkdtemp()
-    os.system(f"cp -rv client/out/* {stage_dir}")
-    os.system(f"cp {json_path} {stage_dir}/game.json")
+    os.system(f"cp -r client/out/* {stage_dir}")
+    with open(f"{stage_dir}/game.json", "w") as f:
+        f.write(json.dumps(json_data))
+    os.system(f"chmod -R 775 {stage_dir}")
     return stage_dir
 
 
@@ -313,53 +310,53 @@ def prepare_stage(json_path):
 #
 
 
-@click.command()
-@click.option("--series-name")
-@click.option("--output", type=click.File())
-@click.option("--num-games", default=None)
+@click.group()
+def main():
+    pass
+
+
+@main.command('single')
 @click.option("--num-samples", default=5)
 @click.option("--alphabet", default="ABCD")
 @click.option("--length", type=int, default=5)
-@click.option("--upload/--no-upload")
-@click.option("--rootdir")
-def main(
-    rootdir=None,
-    series_name=None,
-    alphabet='ABCD',
-    length=5,
-    num_games=None,
-    num_samples=5,
-    output_path=None,
-    upload=False,
-):
-    rootdir = rootdir.rstrip("/")
+@click.argument("output", type=click.File("w"))
+def single(alphabet, length, num_samples, output):
+    emit_json(alphabet, length, num_samples, output)
 
-    if output_path is not None:
-        series_name
-    elif series_name is None:
-        series_name = random_words(2)
 
-    if num_games:
-        game_names = [random_words(2) for _ in range(num_games)]
-    else:
-        game_names = [""]
-
-    for game_name in game_names:
-        jsonfile = game_json(alphabet, length, num_samples)
-        os.makedirs(f"{rootdir}/{series_name}/{game_name}")
-        with open(f"{rootdir}/{series_name}/{game_name}/game.json", "w") as f:
-            f.write(json.dumps(jsonfile))
-
-    click.echo(f"{rootdir}/{series_name}")
-
-    if upload:
-        title = "string-guessing"
-        for game_name in game_names:
-            os.system(f"cd client && elm make src/Main.elm --optimize --output {rootdir}/{series_name}/{game_name}/index.html")
-        print("Upload to mancer requested, uploading...")
-        os.system(f"ssh med@mancer.in mkdir -p /var/www/files/{title}/{series_name}")
-        os.system(f"scp -r {rootdir}/{series_name}/ med@mancer.in:/var/www/files/{title}/")
-        click.echo(f"https://files.mancer.in/{title}/{series_name}")
+@main.command('upload')
+@click.option("--num-samples", default=5)
+@click.option("--alphabet", default="ABCD")
+@click.option("--length", type=int, default=5)
+@click.option("--series-name", default=None)
+@click.option("--num-games", default=5)
+def upload(alphabet, length, num_samples, series_name, num_games):
+    games = [
+        game_json(alphabet, length, num_samples)
+        for _ in range(num_games)
+    ]
+    stage_dirs = [prepare_stage(game) for game in games]
+    series_name = series_name or random_words(2)
+    for stage_dir in stage_dirs:
+        game_name = random_words(2)
+        remote_prefix = "/var/www/files/string-guessing"
+        remote_path = f"{series_name}/{game_name}"
+        os.system(f"ssh med@mancer.in mkdir -p {remote_prefix}/{remote_path}")
+        os.system(
+            f'bash -c "'
+            f'scp -q -r '
+            f'{stage_dir}/* '
+            f'\\"med@mancer.in:{remote_prefix}/{remote_path}/\\"'
+            f'"'
+        )
+        os.system(f"ssh med@mancer.in rm {remote_prefix}/latest")
+        os.system(
+            f"ssh med@mancer.in "
+            f"ln -sf {remote_prefix}/{series_name} {remote_prefix}/latest"
+        )
+        os.system(f"rm -rf {stage_dir}")
+        print(stage_dir)
+    click.echo(f"https://files.mancer.in/string-guessing/{series_name}")
 
 
 if __name__ == "__main__":
