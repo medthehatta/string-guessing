@@ -6,11 +6,9 @@ import json
 import os
 import random
 import re
-import shutil
 from collections import Counter
 from collections import defaultdict
 from functools import reduce
-from functools import partial
 from types import SimpleNamespace
 from math import log
 import subprocess
@@ -19,7 +17,6 @@ import click
 import diceware
 from cytoolz import curry
 from cytoolz import dissoc
-from cytoolz import merge
 from cytoolz import juxt
 
 #
@@ -88,6 +85,10 @@ def random_word():
     ).decode("utf-8").strip()
 
 
+def random_words(num):
+    return "-".join(random_word() for _ in range(num))
+
+
 #
 # Predicate helpers
 #
@@ -115,11 +116,6 @@ def not_(func):
         return not func(seq)
 
     return _
-
-
-#
-# Analysis helpers
-#
 
 
 #
@@ -239,23 +235,33 @@ def posc(length, positions, char):
     return "".join(res)
 
 
+@curry
+def sweep_offsets(kernel, max_):
+
+    def _componentwise(f, a, b):
+        return [f(*ab) for ab in zip(a, b)]
+
+    klen = len(kernel)
+    gen = (
+        _componentwise(lambda x, y: x + y, kernel, [i]*klen)
+        for i in itertools.count()
+    )
+    return list(itertools.takewhile(lambda x: x[-1] <= max_, gen))
+
+
 def measurements(x, seqs):
     alphabet = seqs.alphabet
     length = seqs.length
-    tri_positions = sum(
-        [
-            [[i, i + 3, i + 4] for i in range(length - 4 - 1)],
-            [[i, i + 2, i + 4] for i in range(length - 4 - 1)],
-            [[i, i + 1, i + 2] for i in range(length - 2 - 1)],
-            [[0, length // 2, -1]],
-        ],
-        [],
-    )
+    sweep = sweep_offsets(max_=length-1)
 
-    res = defaultdict(dict)
+    tri_positions = flatten_list([
+        sweep([0, 1, 2]),
+        sweep([0, 2, 4]),
+        sweep([0, 3, 4]),
+        [[0, length//2, -1]],
+    ])
 
-    nonzeros = []
-    zeros = []
+    res = {}
 
     for char in alphabet:
         res[f"{char}"] = count_of(char, x)
@@ -264,146 +270,7 @@ def measurements(x, seqs):
         for (i, j, k) in tri_positions:
             res[posc(length, [i, j, k], char)] = at_positions([i, j, k], char, x)
 
-    zeros = [k for (k, v) in res.items() if not k.startswith("_") and v == 0]
-    nonzeros = [k for (k, v) in res.items() if not k.startswith("_") and v != 0]
-
-    res["_stats_"] = {
-        "zeros": {z: True for z in zeros},
-        "nonzeros": {z: True for z in nonzeros},
-        "nonzero %": round(100 * len(nonzeros) / (len(nonzeros) + len(zeros)), 2),
-    }
     return res
-
-
-#
-# HTML stuff
-#
-
-
-button_container_tpl = """
-<div class="menu-container">
-    <div class="button-container">
-{links}
-    </div>
-</div>
-"""
-
-html_tpl = """
-<html>
-<head>
-<style>
-.button-container {{
-    width: 100%;
-    overflow-y: auto;
-}}
-
-.button-container > a {{
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 150px;
-    height: 150px;
-    line-height: 30px;
-    float: left;
-    background: lightgray;
-    margin: 2px;
-    text-align: center;
-    text-decoration: none;
-    font-weight: bold;
-    font-family: sans;
-    font-size: 24;
-}}
-
-p {{
-    width: 100%;
-    height: 50px;
-    float: left;
-    text-align: center;
-    line-height: 50px;
-    font-weight: bold;
-    text-decoration: none;
-    background: lightblue;
-}}
-</style>
-</head>
-
-<body>
-{}
-<p><a href="./index.html">home</a></p>
-<p><a href="./answers.html">answers</a></p>
-</body>
-</html>
-"""
-
-
-def html(data):
-    return html_tpl.format(data)
-
-
-def wrap_to_html(data):
-    return "<h1>{}</h1>".format(json.dumps(data))
-
-
-def buttons_html(buttons):
-    split_buttons = [el if isinstance(el, tuple) else (el, el) for el in buttons]
-    full_link_text = "\n".join(
-        f'<a href="./{link}.html" class="button">{name}</a>'
-        for (link, name) in split_buttons
-    )
-    return html(button_container_tpl.format(links=full_link_text))
-
-
-def write_html(prefix, name, data):
-    with open(os.path.join(prefix, name + ".html"), "w") as f:
-        f.write(data)
-
-
-def apply_html_files(prefix, data_dict, overwrite=False):
-    if os.path.isdir(prefix) and overwrite:
-        if prefix.count(os.path.sep) < 3:
-            raise RuntimeError('Not willing to delete prefix "{}"'.format(prefix))
-        shutil.rmtree(prefix)
-
-    elif os.path.isdir(prefix) and not overwrite:
-        raise RuntimeError('Prefix already exists: "{}"'.format(prefix))
-
-    os.makedirs(prefix)
-
-    for (name, data) in data_dict.items():
-        write_html(prefix, str(name), data)
-
-
-def make_buttons(tree, index=""):
-    current_index = index if index else "index"
-
-    def index_for(x):
-        return f"{index}.{x}" if index else f"{x}"
-
-    # Base case
-    if not isinstance(tree, dict):
-        return {current_index: html(wrap_to_html(tree))}
-
-    # Otherwise...
-    button_list = [(index_for(i), str(k)) for (i, k) in enumerate(tree.keys())]
-    index_entry = {current_index: buttons_html(button_list)}
-    return merge(
-        index_entry,
-        *[
-            make_buttons(v, index=index_for(i))
-            for (i, (k, v)) in enumerate(tree.items())
-        ],
-    )
-
-
-def make_game(prefix, game_name, alphabet, length):
-    seqs = Seqs(alphabet, length)
-    q = seqs.make()
-    measures = measurements(q, seqs)
-    apply_html_files(
-        f"{prefix}/{game_name}", make_buttons(measures), overwrite=True,
-    )
-    write_html(f"{prefix}/{game_name}", "answers", html(wrap_to_html(q)))
-    return (f"{prefix}/{game_name}/index.html", measures)
 
 
 def game_json(alphabet, length, num_samples):
@@ -429,7 +296,7 @@ def game_json(alphabet, length, num_samples):
 
 @click.command()
 @click.option("--series-name")
-@click.option("--num-games", default=1)
+@click.option("--num-games", default=None)
 @click.option("--num-samples", default=5)
 @click.option("--alphabet", default="ABCD")
 @click.option("--length", type=int, default=5)
@@ -437,34 +304,33 @@ def game_json(alphabet, length, num_samples):
 @click.argument("rootdir")
 def main(
     rootdir,
-    series_name,
+    series_name=None,
     alphabet='ABCD',
     length=5,
-    num_games=1,
+    num_games=None,
     num_samples=5,
     upload=False,
 ):
     rootdir = rootdir.rstrip("/")
-    diceware_settings = SimpleNamespace(
-        num=2,
-        infile=None,
-        delimiter="-",
-        specials=0,
-        randomsource="system",
-        caps=False,
-        wordlist="en",
-    )
-    series_name = series_name or diceware.get_passphrase(diceware_settings)
-    for _ in range(num_games):
-        game_name = diceware.get_passphrase(diceware_settings)
+    series_name = series_name or random_words(2)
+
+    if num_games:
+        game_names = [random_words(2) for _ in range(num_games)]
+    else:
+        game_names = [""]
+
+    for game_name in game_names:
         jsonfile = game_json(alphabet, length, num_samples)
         os.makedirs(f"{rootdir}/{series_name}/{game_name}")
         with open(f"{rootdir}/{series_name}/{game_name}/game.json", "w") as f:
             f.write(json.dumps(jsonfile))
-        os.system(f"cd client && elm make src/Main.elm --optimize --output {rootdir}/{series_name}/{game_name}/index.html")
+
+    click.echo(f"{rootdir}/{series_name}")
 
     if upload:
         title = "string-guessing"
+        for game_name in game_names:
+            os.system(f"cd client && elm make src/Main.elm --optimize --output {rootdir}/{series_name}/{game_name}/index.html")
         print("Upload to mancer requested, uploading...")
         os.system(f"ssh med@mancer.in mkdir -p /var/www/files/{title}/{series_name}")
         os.system(f"scp -r {rootdir}/{series_name}/ med@mancer.in:/var/www/files/{title}/")
