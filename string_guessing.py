@@ -430,6 +430,7 @@ def game_json(alphabet, length, num_samples):
 @click.command()
 @click.option("--series-name")
 @click.option("--num-games", default=1)
+@click.option("--num-samples", default=5)
 @click.option("--alphabet", default="ABCD")
 @click.option("--length", type=int, default=5)
 @click.option("--upload/--no-upload")
@@ -440,6 +441,7 @@ def main(
     alphabet='ABCD',
     length=5,
     num_games=1,
+    num_samples=5,
     upload=False,
 ):
     rootdir = rootdir.rstrip("/")
@@ -455,32 +457,18 @@ def main(
     series_name = series_name or diceware.get_passphrase(diceware_settings)
     for _ in range(num_games):
         game_name = diceware.get_passphrase(diceware_settings)
-        (path, game) = make_game(
-            f"{rootdir}/{series_name}",
-            game_name,
-            alphabet,
-            length,
-        )
-        click.echo(f"{path} ({game['_stats_']['nonzero %']} %)")
+        jsonfile = game_json(alphabet, length, num_samples)
+        os.makedirs(f"{rootdir}/{series_name}/{game_name}")
+        with open(f"{rootdir}/{series_name}/{game_name}/game.json", "w") as f:
+            f.write(json.dumps(jsonfile))
+        os.system(f"cd client && elm make src/Main.elm --optimize --output {rootdir}/{series_name}/{game_name}/index.html")
 
     if upload:
         title = "string-guessing"
-        tarball = f"{title}-{series_name}"
         print("Upload to mancer requested, uploading...")
-        print("Compressing...")
-        os.system(
-            f"tar -C {rootdir} -cvJf {rootdir}/{tarball}.tar.xz {series_name} 2>&1"
-        )
-        print("Uploading package...")
-        os.system(f"ssh med@mancer.in mkdir -p /var/www/files/{title}")
-        os.system(
-            f"scp -v {rootdir}/{tarball}.tar.xz med@mancer.in:/var/www/files/{title} 2>&1"
-        )
-        print("Unpacking package...")
-        os.system(
-            f"ssh med@mancer.in tar -C /var/www/files/{title} -xvJf /var/www/files/{title}/{tarball}.tar.xz 2>&1"
-        )
-
+        os.system(f"ssh med@mancer.in mkdir -p /var/www/files/{title}/{series_name}")
+        os.system(f"scp -r {rootdir}/{series_name}/ med@mancer.in:/var/www/files/{title}/")
+        click.echo(f"https://files.mancer.in/{title}/{series_name}")
 
 
 if __name__ == "__main__":
