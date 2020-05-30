@@ -177,10 +177,26 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
+    let
+        showp =
+            if model.answersRevealed == True then
+                "hide"
+
+            else
+                "reveal"
+
+        showm =
+            if model.answersRevealed == True then
+                HideAnswers
+
+            else
+                ShowAnswers
+    in
     div [] <|
         [ viewSamples model.samples model.selectedSample
         , viewTests model.tests
         , viewResults model.results
+        , a [ Attrs.href "#", onClick showm ] [ text <| "(" ++ showp ++ " answers)" ]
         ]
             ++ (if model.answersRevealed == True then
                     [ viewAnswers model.answers ]
@@ -243,7 +259,6 @@ viewResults results =
                 )
                 results
             )
-        , a [ Attrs.href "#", onClick ShowAnswers ] [ text "(reveal answers)" ]
         ]
 
 
@@ -257,7 +272,6 @@ viewAnswers answers =
                 )
                 (Dict.toList answers)
             )
-        , a [ Attrs.href "#", onClick HideAnswers ] [ text "(hide answers)" ]
         ]
 
 
