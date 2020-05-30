@@ -249,17 +249,12 @@ viewTests tests =
 viewResults results =
     let
         viewResult ( sample, test, r ) =
-            td [ Attrs.style "font-size" "24px" ] [ text (sample.text ++ " " ++ test.text ++ " = " ++ r) ]
+            li [ Attrs.style "font-size" "24px" ] [ text (sample.text ++ " " ++ test.text ++ " = " ++ r) ]
     in
     div sectionAttrs
         [ h1 [] [ text "Results" ]
-        , table []
-            (List.map
-                (\res ->
-                    tr [] [ viewResult res ]
-                )
-                results
-            )
+        , ol []
+            (List.map viewResult results)
         ]
 
 
