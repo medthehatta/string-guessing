@@ -13,10 +13,12 @@ from functools import reduce
 from functools import partial
 from types import SimpleNamespace
 from math import log
+import subprocess
 
 import click
 import diceware
 from cytoolz import curry
+from cytoolz import dissoc
 from cytoolz import merge
 from cytoolz import juxt
 
@@ -77,6 +79,13 @@ def rx(s):
 
 def flatten_list(seq):
     return list(itertools.chain.from_iterable(seq))
+
+
+def random_word():
+    return subprocess.check_output(
+        f"sort -R {diceware.get_wordlist_path('en')} | head -n1",
+        shell=True,
+    ).decode("utf-8").strip()
 
 
 #
@@ -395,6 +404,28 @@ def make_game(prefix, game_name, alphabet, length):
     )
     write_html(f"{prefix}/{game_name}", "answers", html(wrap_to_html(q)))
     return (f"{prefix}/{game_name}/index.html", measures)
+
+
+def game_json(alphabet, length, num_samples):
+    seqs = Seqs(alphabet, length)
+    words = (random_word() for _ in itertools.count())
+    samples = [seqs.make() for _ in range(num_samples)]
+    qs = dict(zip(words, samples))
+    ms = {k: dissoc(dict(measurements(v, seqs)), "_stats_") for (k, v) in qs.items()}
+    data = {
+        "game": "0",
+        "samples": list(qs.keys()),
+        "tests": list(list(ms.values())[0].keys()),
+        "answers": qs,
+        "measures": ms,
+    }
+    with open("/tmp/game.json", "w") as f:
+        try:
+            f.write(json.dumps(data))
+        except Exception:
+            import pdb; pdb.set_trace()
+            print("wtf")
+    return data
 
 
 #
