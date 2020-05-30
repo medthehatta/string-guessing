@@ -90,6 +90,7 @@ type alias Model =
     , answersRevealed : Bool
     , money : Int
     , selectedSample : Maybe Sample
+    , resultsExpanded : Bool
     }
 
 
@@ -103,6 +104,7 @@ initialModel =
     , answersRevealed = False
     , money = 0
     , selectedSample = Nothing
+    , resultsExpanded = True
     }
 
 
@@ -113,6 +115,7 @@ type Msg
     | GotGameState (Result Http.Error GameStateReply)
     | ShowAnswers
     | HideAnswers
+    | ToggleResults
 
 
 
@@ -170,6 +173,14 @@ update msg model =
         HideAnswers ->
             ( { model | answersRevealed = False }, Cmd.none )
 
+        ToggleResults ->
+            case model.resultsExpanded of
+                True ->
+                    ( { model | resultsExpanded = False }, Cmd.none )
+
+                False ->
+                    ( { model | resultsExpanded = True }, Cmd.none )
+
 
 
 -- VIEW
@@ -195,8 +206,8 @@ view model =
     div [] <|
         [ viewSamples model.samples model.selectedSample
         , viewTests model.tests
-        , viewResults model.results
-        , a [ Attrs.style "font-size" "22px", Attrs.href "#", onClick showm ] [ text <| "(" ++ showp ++ " answers)" ]
+        , viewResults model.results model.resultsExpanded
+        , a [ Attrs.class "outer", Attrs.href "#", onClick showm ] [ text <| "(" ++ showp ++ " answers)" ]
         ]
             ++ (if model.answersRevealed == True then
                     [ viewAnswers model.answers ]
@@ -208,7 +219,7 @@ view model =
 
 
 sectionAttrs =
-    [ Attrs.style "float" "left", Attrs.style "width" "100%" ]
+    [ Attrs.class "section" ]
 
 
 viewSamples samples selectedSample =
@@ -246,14 +257,27 @@ viewTests tests =
         ]
 
 
-viewResults results =
+viewResults results expanded =
     let
         viewResult ( sample, test, r ) =
-            li [ Attrs.style "font-size" "24px" ] [ text (sample.text ++ " " ++ test.text ++ " = " ++ r) ]
+            li [ Attrs.class "outer" ] [ text (sample.text ++ " " ++ test.text ++ " = " ++ r) ]
+
+        exStyle =
+            if expanded == True then
+                { arrowClass = "fas fa-angle-down"
+                , arrowAlt = "Collapse"
+                , disp = Attrs.style "display" "block"
+                }
+
+            else
+                { arrowClass = "fas fa-angle-up"
+                , arrowAlt = "Expand"
+                , disp = Attrs.style "display" "none"
+                }
     in
-    div sectionAttrs
-        [ h1 [] [ text "Results" ]
-        , ol []
+    div [ Attrs.class "footer" ]
+        [ h1 [ onClick ToggleResults ] [ i [ Attrs.class exStyle.arrowClass, Attrs.alt exStyle.arrowAlt ] [], span [] [ text "Results" ] ]
+        , ol [ exStyle.disp ]
             (List.map viewResult results)
         ]
 
@@ -296,40 +320,23 @@ viewInstructions =
             [ h2 [] [ text "How to play" ]
             , p [] [ text "Click the sample you want to test, then the test you want to perform on it.  The answer will appear in the 'Results' list" ]
             , p [] [ text "When you're ready to check your work, click the 'reveal answers' link" ]
+            , div [ Attrs.class "footer-space" ] []
             ]
         ]
 
 
 defaultButtonStyle : List (Attribute Msg)
 defaultButtonStyle =
-    let
-        styles =
-            [ ( "display", "flex" )
-            , ( "align-items", "center" )
-            , ( "justify-content", "center" )
-            , ( "width", "150px" )
-            , ( "height", "150px" )
-            , ( "line-height", "30px" )
-            , ( "float", "left" )
-            , ( "background", "lightgray" )
-            , ( "margin", "2px" )
-            , ( "text-align", "center" )
-            , ( "text-decoration", "none" )
-            , ( "font-weight", "bold" )
-            , ( "font-family", "sans" )
-            , ( "font-size", "24px" )
-            ]
-    in
-    List.map (\( x, y ) -> Attrs.style x y) styles
+    [ Attrs.class "button" ]
 
 
 selectedButtonStyle =
-    defaultButtonStyle ++ [ Attrs.style "border" "4px solid black" ]
+    defaultButtonStyle ++ [ Attrs.class "bordered" ]
 
 
 viewButtons : { caption : a -> String, signal : a -> Msg, style : a -> List (Attribute Msg) } -> List a -> Html Msg
 viewButtons { caption, signal, style } buttons =
-    div [ Attrs.style "float" "left" ]
+    div [ Attrs.class "section" ]
         (List.map
             (\x -> viewButton (caption x) (style x) (signal x))
             buttons
