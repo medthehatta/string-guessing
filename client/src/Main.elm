@@ -16,7 +16,12 @@ import Json.Decode as D
 
 
 main =
-    element { init = init, view = view, update = update, subscriptions = subscriptions }
+    element
+        { init = init
+        , view = view
+        , update = update
+        , subscriptions = subscriptions
+        }
 
 
 init : () -> ( Model, Cmd Msg )
@@ -120,7 +125,11 @@ update msg model =
             ( model, Cmd.none )
 
         SampleClicked sample ->
-            ( { model | selectedSample = pickOrToggle model.selectedSample sample }, Cmd.none )
+            let
+                newSample =
+                    pickOrToggle model.selectedSample sample
+            in
+            ( { model | selectedSample = newSample }, Cmd.none )
 
         SelectNone ->
             ( { model | selectedSample = Nothing }, Cmd.none )
@@ -277,20 +286,27 @@ view model =
             ++ [ viewInstructions ]
 
 
-sectionAttrs =
-    [ Attrs.class "section" ]
-
-
 colorForSample sampleColoring sample =
     Dict.get sample sampleColoring |> Maybe.withDefault Color.black
 
 
+bgColor : Color -> Attribute Msg
+bgColor color =
+    Color.toCssString color |> Attrs.style "background"
+
+
+fgColor : Color -> Attribute Msg
+fgColor color =
+    Color.toCssString color |> Attrs.style "color"
+
+
 viewSamples samples selectedSample sampleColoring =
     let
+        getColor : Sample -> Color
         getColor =
             colorForSample sampleColoring
     in
-    div sectionAttrs
+    section []
         [ h1 [] [ text "Samples" ]
         , viewButtons
             { caption = \x -> x
@@ -299,21 +315,21 @@ viewSamples samples selectedSample sampleColoring =
                 \x ->
                     case selectedSample of
                         Nothing ->
-                            defaultButtonStyle ++ [ Attrs.style "background" (Color.toCssString <| getColor x) ]
+                            defaultButtonStyle ++ [ getColor x |> bgColor ]
 
                         Just selectedSample_ ->
                             if x == selectedSample_ then
-                                selectedButtonStyle ++ [ Attrs.style "background" (Color.toCssString <| getColor x) ]
+                                selectedButtonStyle ++ [ getColor x |> bgColor ]
 
                             else
-                                defaultButtonStyle ++ [ Attrs.style "background" (Color.toCssString <| getColor x) ]
+                                defaultButtonStyle ++ [ getColor x |> bgColor ]
             }
             samples
         ]
 
 
 viewTests tests =
-    div sectionAttrs
+    section []
         [ h1 [] [ text "Tests" ]
         , viewButtons
             { caption = \x -> x
@@ -325,7 +341,7 @@ viewTests tests =
 
 
 viewContracts contracts =
-    div sectionAttrs
+    section []
         [ h1 [] [ text "Contracts" ]
         , viewButtons
             { caption = \x -> x
@@ -342,7 +358,7 @@ viewResults results expanded sampleColoring =
             colorForSample sampleColoring
 
         resultStyle sample =
-            [ Attrs.class "outer", Attrs.style "color" (Color.toCssString <| getColor sample) ]
+            [ Attrs.class "outer", getColor sample |> fgColor ]
 
         viewResult : SampleResult -> Html Msg
         viewResult res =
@@ -392,7 +408,7 @@ viewResults results expanded sampleColoring =
 
 
 viewAnswers answers =
-    div sectionAttrs
+    section []
         [ h1 [] [ text "Answers" ]
         , table [ Attrs.class "answer-table" ]
             (List.map
@@ -405,7 +421,7 @@ viewAnswers answers =
 
 
 viewInstructions =
-    div sectionAttrs
+    section []
         [ hr [] []
         , h1 [] [ text "Instructions" ]
         , div []
