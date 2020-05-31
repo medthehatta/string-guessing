@@ -45,8 +45,9 @@ type alias Sample =
     String
 
 
-type alias TestResult =
-    String
+type SampleResult
+    = TestResult Sample Test Int
+    | ContractResult Sample Contract Bool
 
 
 type alias GameStateReply =
@@ -60,7 +61,7 @@ type alias Model =
     { tests : List Test
     , samples : List Sample
     , sampleColoring : Dict Sample Color
-    , results : List ( Sample, Test, TestResult )
+    , results : List SampleResult
     , measures : Dict String (Dict String Int)
     , answers : Dict String String
     , contracts : Dict String (Dict String Bool)
@@ -134,12 +135,10 @@ update msg model =
                             Dict.get sample model.measures
                                 |> Maybe.andThen (Dict.get test)
                                 |> Maybe.withDefault 0
-                                |> String.fromInt
 
                         newModel =
                             { model
-                                | selectedSample = Nothing
-                                , results = model.results ++ [ ( sample, test, result ) ]
+                                | results = model.results ++ [ TestResult sample test result ]
                             }
                     in
                     ( newModel, Cmd.none )
@@ -155,11 +154,8 @@ update msg model =
                             Dict.get sample model.contracts
                                 |> Maybe.andThen (Dict.get contractString)
                                 |> Maybe.withDefault False
-
-                        newModel =
-                            { model | selectedSample = Nothing }
                     in
-                    ( newModel, Cmd.none )
+                    ( model, Cmd.none )
 
         GotGameState s ->
             case s of
@@ -233,8 +229,8 @@ view model =
     div [] <|
         [ viewSamples model.samples model.selectedSample model.sampleColoring
         , viewTests model.tests
-        , viewResults model.results model.resultsExpanded model.sampleColoring
         , viewContracts model.contracts
+        , viewResults model.results model.resultsExpanded model.sampleColoring
         , a [ Attrs.class "outer", onClick ToggleAnswers ] [ text <| "(" ++ showp ++ " answers)" ]
         ]
             ++ (if model.answersRevealed == True then
@@ -250,10 +246,14 @@ sectionAttrs =
     [ Attrs.class "section" ]
 
 
+colorForSample sampleColoring sample =
+    Dict.get sample sampleColoring |> Maybe.withDefault Color.black
+
+
 viewSamples samples selectedSample sampleColoring =
     let
-        getColor sample =
-            Dict.get sample sampleColoring |> Maybe.withDefault Color.black
+        getColor =
+            colorForSample sampleColoring
     in
     div sectionAttrs
         [ h1 [] [ text "Samples" ]
@@ -310,15 +310,28 @@ viewContracts contracts =
 
 viewResults results expanded sampleColoring =
     let
-        getColor sample =
-            Dict.get sample sampleColoring |> Maybe.withDefault Color.black
+        getColor =
+            colorForSample sampleColoring
 
         resultStyle sample =
             [ Attrs.class "outer", Attrs.style "color" (Color.toCssString <| getColor sample) ]
 
-        viewResult : ( Sample, Test, TestResult ) -> Html Msg
-        viewResult ( sample, test, result ) =
-            li (resultStyle sample) [ text (sample ++ " " ++ test ++ " = " ++ result) ]
+        viewResult : SampleResult -> Html Msg
+        viewResult res =
+            case res of
+                TestResult sample test num ->
+                    li (resultStyle sample) [ text (sample ++ " " ++ test ++ " = " ++ String.fromInt num) ]
+
+                ContractResult sample contract p ->
+                    let
+                        truth =
+                            if p == True then
+                                "YES"
+
+                            else
+                                "NO"
+                    in
+                    li (resultStyle sample) [ text (sample ++ " " ++ contract ++ " = " ++ truth) ]
 
         exStyle =
             if expanded == True then
