@@ -205,7 +205,7 @@ def _random_comparison(max_, *tests):
     return compare(test, a)
 
 
-def contracts(seqs):
+def random_contracts(seqs):
     alphabet = seqs.alphabet
     length = seqs.length
     sweep = sweep_offsets(max_=length - 1)
@@ -241,7 +241,7 @@ def std(lst):
     return sqrt(var/len(lst))
 
 
-def evaluate_candidate_contracts(contracts, values):
+def truth_frequencies(contracts, values):
     interactions = [
         (val, contract, contract(val))
         for val in values for contract in contracts
@@ -253,15 +253,15 @@ def evaluate_candidate_contracts(contracts, values):
     truth_freq_by_contract = \
         Counter(contract for (val, contract, p) in interactions if p)
 
-    num_vals_matching_all = len([
-        v for v in truth_freq_by_val.values()
-        if v == len(contracts)
-    ])
+    return (truth_freq_by_val, truth_freq_by_contract)
 
-    num_contracts_matching_all = len([
-        v for v in truth_freq_by_contract.values()
-        if v == len(values)
-    ])
+
+def evaluate_candidate_contracts(truth_freq_by_val, truth_freq_by_contract):
+    values = truth_freq_by_val.keys()
+    contracts = truth_freq_by_contract.keys()
+
+    no_universal_values = \
+        not any(v == len(contracts) for v in truth_freq_by_val.values())
 
     all_vals_can_score = all(
         val in truth_freq_by_val
@@ -273,20 +273,66 @@ def evaluate_candidate_contracts(contracts, values):
         for contract in contracts
     )
 
-    std_vals_small = \
+    std_vals_small = (
+        len(truth_freq_by_val.values()) > 0 and
         std(truth_freq_by_val.values()) < len(contracts) / 3
+    )
 
-    std_contracts_small = \
+    std_contracts_small = (
+        len(truth_freq_by_contract.values()) > 0 and
         std(truth_freq_by_contract.values()) < len(values) / 3
+    )
 
     return all([
         all_vals_can_score,
         all_contracts_can_score,
-        num_vals_matching_all <= 1,
-        num_contracts_matching_all <= 1,
+        no_universal_values,
         std_vals_small,
         std_contracts_small,
     ])
+
+
+def select_reasonable_contracts(seqs, qs, num_contracts):
+    num_samples = len(qs)
+
+    candidate_contracts = partition(num_contracts, random_contracts(seqs))
+    # We accept only sets of contracts which are actually interesting to play.
+    #
+    # `evaluate_candidate_contracts` checks all the conditions except for one
+    # which fails frequently and which we need to modify gently instead of
+    # rejection sampling: we need to attempt to replace contracts which can be
+    # fulfulled by ANY of the samples.
+    #
+    for contracts in candidate_contracts:
+        (truth_by_val, truth_by_contract) = \
+            truth_frequencies(contracts, qs.values())
+        if not evaluate_candidate_contracts(truth_by_val, truth_by_contract):
+            continue
+        contracts_matching_all = [
+            contract for contract in contracts
+            if truth_by_contract[contract] == num_samples
+        ]
+        if not contracts_matching_all:
+            return contracts
+        while contracts_matching_all:
+            adjusted = [
+                (
+                    next(random_contracts(seqs))
+                    if contract in contracts_matching_all else
+                    contract
+                )
+                for contract in contracts
+            ]
+            (truth_by_val, truth_by_contract) = \
+                truth_frequencies(adjusted, qs.values())
+            if not evaluate_candidate_contracts(truth_by_val, truth_by_contract):
+                continue
+            contracts_matching_all = [
+                contract for contract in adjusted
+                if truth_by_contract[contract] == num_samples
+            ]
+        # We have to get here eventually
+        return adjusted
 
 
 def game_json(alphabet, length, num_samples, num_contracts):
@@ -295,12 +341,7 @@ def game_json(alphabet, length, num_samples, num_contracts):
     samples = [seqs.make() for _ in range(num_samples)]
     qs = dict(zip(words, samples))
     ms = {k: measurements(v, seqs) for (k, v) in qs.items()}
-    candidate_contracts = partition(num_contracts, contracts(seqs))
-    # We accept only sets of contracts which are actually interesting to play
-    selected_contracts = next(
-        contracts for contracts in candidate_contracts
-        if evaluate_candidate_contracts(contracts, qs.values())
-    )
+    selected_contracts = select_reasonable_contracts(seqs, qs, num_contracts)
     cs = {
         k: {contract._text: contract(v) for contract in selected_contracts}
         for (k, v) in qs.items()
