@@ -12,6 +12,8 @@ from collections import Counter
 from collections import defaultdict
 from functools import reduce
 from math import log
+from math import sqrt
+from math import isclose
 from types import SimpleNamespace
 
 import click
@@ -21,6 +23,7 @@ from cytoolz import dissoc
 from cytoolz import juxt
 from cytoolz import sliding_window
 from cytoolz import take
+from cytoolz import partition
 
 #
 # Constants
@@ -227,20 +230,76 @@ def contracts(seqs):
             )
 
 
+def average(lst):
+    lst = list(lst)
+    return sum(lst) / len(lst)
+
+
+def std(lst):
+    avg = average(lst)
+    var = sum((x - avg)**2 for x in lst)
+    return sqrt(var/len(lst))
+
+
+def evaluate_candidate_contracts(contracts, values):
+    interactions = [
+        (val, contract, contract(val))
+        for val in values for contract in contracts
+    ]
+
+    truth_freq_by_val = \
+        Counter(val for (val, contract, p) in interactions if p)
+
+    truth_freq_by_contract = \
+        Counter(contract for (val, contract, p) in interactions if p)
+
+    num_vals_matching_all = len([
+        v for v in truth_freq_by_val.values()
+        if v == len(contracts)
+    ])
+
+    num_contracts_matching_all = len([
+        v for v in truth_freq_by_contract.values()
+        if v == len(values)
+    ])
+
+    all_vals_can_score = all(
+        val in truth_freq_by_val
+        for val in values
+    )
+
+    all_contracts_can_score = all(
+        contract in truth_freq_by_contract
+        for contract in contracts
+    )
+
+    std_vals_small = \
+        std(truth_freq_by_val.values()) < len(contracts) / 3
+
+    std_contracts_small = \
+        std(truth_freq_by_contract.values()) < len(values) / 3
+
+    return all([
+        all_vals_can_score,
+        all_contracts_can_score,
+        num_vals_matching_all <= 1,
+        num_contracts_matching_all <= 1,
+        std_vals_small,
+        std_contracts_small,
+    ])
+
+
 def game_json(alphabet, length, num_samples, num_contracts):
     seqs = Seqs(alphabet, length)
     words = (f"sample{i}" for i in itertools.count(1))
     samples = [seqs.make() for _ in range(num_samples)]
     qs = dict(zip(words, samples))
     ms = {k: measurements(v, seqs) for (k, v) in qs.items()}
-    # Take `num_contracts` contracts, but only take contracts that can be
-    # satisfied by at least ONE of the samples!
-    selected_contracts = take(
-        num_contracts,
-        (
-            contract for contract in contracts(seqs)
-            if any(contract(v) for v in qs.values())
-        ),
+    candidate_contracts = partition(num_contracts, contracts(seqs))
+    # We accept only sets of contracts which are actually interesting to play
+    selected_contracts = next(
+        contracts for contracts in candidate_contracts
+        if evaluate_candidate_contracts(contracts, qs.values())
     )
     cs = {
         k: {contract._text: contract(v) for contract in selected_contracts}
