@@ -61,12 +61,19 @@ type alias GameSetup =
     }
 
 
+type alias SetupInterrogator =
+    { measure : Sample -> Test -> SampleResult
+    , tryContract : Sample -> Contract -> SampleResult
+    , getAnswer : Sample -> Answer
+    }
+
+
 type alias Model =
     { tests : List Test
     , samples : List Sample
     , contracts : List Contract
     , answers : List Answer
-    , setup : GameSetup
+    , setup : SetupInterrogator
     , sampleColoring : Dict Sample Color
     , results : List SampleResult
     , answersRevealed : Bool
@@ -83,7 +90,7 @@ initialModel =
     , answers = []
     , sampleColoring = Dict.empty
     , results = []
-    , setup = emptyGameSetup
+    , setup = emptyInterrogator
     , answersRevealed = False
     , money = 100
     , selectedSample = Nothing
@@ -94,6 +101,7 @@ initialModel =
 type Msg
     = Noop
     | GotGameState (Result Http.Error GameSetup)
+    | SelectNone
     | SampleClicked Sample
     | TestClicked Test
     | ContractClicked Contract
@@ -103,6 +111,64 @@ type Msg
 
 
 -- UPDATE
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    case msg of
+        Noop ->
+            ( model, Cmd.none )
+
+        SampleClicked sample ->
+            ( { model | selectedSample = pickOrToggle model.selectedSample sample }, Cmd.none )
+
+        SelectNone ->
+            ( { model | selectedSample = Nothing }, Cmd.none )
+
+        TestClicked test ->
+            case model.selectedSample of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just sample ->
+                    let
+                        result =
+                            model.setup.measure sample test
+
+                        newModel =
+                            { model | results = model.results ++ [ result ] }
+                    in
+                    ( newModel, Cmd.none )
+
+        ContractClicked contract ->
+            case model.selectedSample of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just sample ->
+                    let
+                        result =
+                            model.setup.tryContract sample contract
+
+                        newModel =
+                            { model | results = model.results ++ [ result ] }
+                    in
+                    ( newModel, Cmd.none )
+
+        GotGameState s ->
+            case s of
+                Ok setup ->
+                    ( initializeModel model setup, Cmd.none )
+
+                Err e ->
+                    -- Do nothing
+                    ( model, Cmd.none )
+
+        ToggleAnswers ->
+            ( { model | answersRevealed = not model.answersRevealed }, Cmd.none )
+
+        ToggleResults ->
+            ( { model | resultsExpanded = not model.resultsExpanded }, Cmd.none )
 
 
 pickOrToggle : Maybe a -> a -> Maybe a
@@ -119,110 +185,66 @@ pickOrToggle match value =
                 Just value
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
-    case msg of
-        Noop ->
-            ( model, Cmd.none )
+initializeModel model setup =
+    let
+        { measures, contracts, answers } =
+            setup
 
-        SampleClicked sample ->
-            ( { model | selectedSample = pickOrToggle model.selectedSample sample }, Cmd.none )
+        samples : List Sample
+        samples =
+            Dict.keys measures
 
-        TestClicked test ->
-            case model.selectedSample of
-                Nothing ->
-                    ( model, Cmd.none )
+        tests : List Test
+        tests =
+            Dict.values measures
+                |> List.head
+                |> Maybe.withDefault Dict.empty
+                |> Dict.keys
 
-                Just sample ->
-                    let
-                        result =
-                            measure model.setup sample test
+        foundAnswers : List Answer
+        foundAnswers =
+            List.map
+                (\( sample, answer ) -> Answer sample answer)
+                (Dict.toList answers)
 
-                        newModel =
-                            { model | results = model.results ++ [ result ] }
-                    in
-                    ( newModel, Cmd.none )
+        contractNames : List Contract
+        contractNames =
+            List.map Dict.keys (Dict.values contracts)
+                |> List.head
+                |> Maybe.withDefault []
 
-        ContractClicked contract ->
-            case model.selectedSample of
-                Nothing ->
-                    ( model, Cmd.none )
+        okColors =
+            [ Color.red
+            , Color.brown
+            , Color.green
+            , Color.blue
+            , Color.purple
+            , Color.orange
+            ]
 
-                Just sample ->
-                    let
-                        result =
-                            tryContract model.setup sample contract
+        sampleColoring : Dict Sample Color
+        sampleColoring =
+            Dict.fromList <|
+                List.map2
+                    Tuple.pair
+                    samples
+                    okColors
 
-                        newModel =
-                            { model | results = model.results ++ [ result ] }
-                    in
-                    ( newModel, Cmd.none )
-
-        GotGameState s ->
-            case s of
-                Ok ({ measures, answers, contracts } as setup) ->
-                    let
-                        samples : List Sample
-                        samples =
-                            Dict.keys measures
-
-                        tests : List Test
-                        tests =
-                            Dict.values measures
-                                |> List.head
-                                |> Maybe.withDefault Dict.empty
-                                |> Dict.keys
-
-                        foundAnswers : List Answer
-                        foundAnswers =
-                            List.map
-                                (\( sample, answer ) -> Answer sample answer)
-                                (Dict.toList answers)
-
-                        contractNamesAll =
-                            List.map Dict.keys (Dict.values contracts)
-
-                        contractNames =
-                            List.head contractNamesAll |> Maybe.withDefault []
-
-                        okColors =
-                            [ Color.red
-                            , Color.brown
-                            , Color.green
-                            , Color.blue
-                            , Color.purple
-                            , Color.orange
-                            ]
-
-                        sampleColoring : Dict Sample Color
-                        sampleColoring =
-                            Dict.fromList <|
-                                List.map2
-                                    Tuple.pair
-                                    samples
-                                    okColors
-
-                        newModel =
-                            { model
-                                | tests = tests
-                                , samples = samples
-                                , sampleColoring = sampleColoring
-                                , contracts = contractNames
-                                , answers = foundAnswers
-                                , setup = setup
-                            }
-                    in
-                    ( newModel, Cmd.none )
-
-                Err e ->
-                    -- Do nothing
-                    ( model, Cmd.none )
-
-        ToggleAnswers ->
-            ( { model | answersRevealed = not model.answersRevealed }, Cmd.none )
-
-        ToggleResults ->
-            ( { model | resultsExpanded = not model.resultsExpanded }, Cmd.none )
+        interrogator : SetupInterrogator
+        interrogator =
+            { measure = measure setup
+            , tryContract = tryContract setup
+            , getAnswer = getAnswer setup
+            }
+    in
+    { model
+        | tests = tests
+        , samples = samples
+        , sampleColoring = sampleColoring
+        , contracts = contractNames
+        , answers = foundAnswers
+        , setup = interrogator
+    }
 
 
 
@@ -234,17 +256,17 @@ view model =
     let
         showp =
             if model.answersRevealed == True then
-                "hide"
+                "(hide answers)"
 
             else
-                "reveal"
+                "(reveal answers)"
     in
     div [] <|
         [ viewSamples model.samples model.selectedSample model.sampleColoring
         , viewTests model.tests
         , viewContracts model.contracts
         , viewResults model.results model.resultsExpanded model.sampleColoring
-        , a [ Attrs.class "outer", onClick ToggleAnswers ] [ text <| "(" ++ showp ++ " answers)" ]
+        , a [ Attrs.class "outer", onClick ToggleAnswers ] [ text showp ]
         ]
             ++ (if model.answersRevealed == True then
                     [ viewAnswers model.answers ]
@@ -464,14 +486,6 @@ constantGameDecoder =
 -- HIDING API DICTS
 
 
-emptyGameSetup : GameSetup
-emptyGameSetup =
-    { measures = Dict.empty
-    , contracts = Dict.empty
-    , answers = Dict.empty
-    }
-
-
 measure : GameSetup -> Sample -> Test -> SampleResult
 measure setup sample test =
     TestResult
@@ -494,7 +508,26 @@ tryContract setup sample contract =
         )
 
 
-getAnswer : GameSetup -> Sample -> String
+getAnswer : GameSetup -> Sample -> Answer
 getAnswer setup sample =
-    Dict.get sample setup.answers
-        |> Maybe.withDefault "(unknown)"
+    Answer
+        sample
+        (Dict.get sample setup.answers
+            |> Maybe.withDefault "(unknown)"
+        )
+
+
+emptyGameSetup : GameSetup
+emptyGameSetup =
+    { measures = Dict.empty
+    , contracts = Dict.empty
+    , answers = Dict.empty
+    }
+
+
+emptyInterrogator : SetupInterrogator
+emptyInterrogator =
+    { measure = measure emptyGameSetup
+    , tryContract = tryContract emptyGameSetup
+    , getAnswer = getAnswer emptyGameSetup
+    }
