@@ -45,12 +45,16 @@ type alias Sample =
     String
 
 
+type Answer
+    = Answer Sample String
+
+
 type SampleResult
     = TestResult Sample Test Int
     | ContractResult Sample Contract Bool
 
 
-type alias GameStateReply =
+type alias GameSetup =
     { measures : Dict String (Dict String Int)
     , contracts : Dict String (Dict String Bool)
     , answers : Dict String String
@@ -60,11 +64,11 @@ type alias GameStateReply =
 type alias Model =
     { tests : List Test
     , samples : List Sample
+    , contracts : List Contract
+    , answers : List Answer
+    , setup : GameSetup
     , sampleColoring : Dict Sample Color
     , results : List SampleResult
-    , measures : Dict String (Dict String Int)
-    , answers : Dict String String
-    , contracts : Dict String (Dict String Bool)
     , answersRevealed : Bool
     , money : Int
     , selectedSample : Maybe Sample
@@ -75,11 +79,11 @@ type alias Model =
 initialModel =
     { tests = []
     , samples = []
+    , contracts = []
+    , answers = []
     , sampleColoring = Dict.empty
     , results = []
-    , measures = Dict.empty
-    , answers = Dict.empty
-    , contracts = Dict.empty
+    , setup = emptyGameSetup
     , answersRevealed = False
     , money = 100
     , selectedSample = Nothing
@@ -89,10 +93,10 @@ initialModel =
 
 type Msg
     = Noop
-    | GotGameState (Result Http.Error GameStateReply)
+    | GotGameState (Result Http.Error GameSetup)
     | SampleClicked Sample
     | TestClicked Test
-    | ContractClicked String
+    | ContractClicked Contract
     | ToggleAnswers
     | ToggleResults
 
@@ -132,18 +136,14 @@ update msg model =
                 Just sample ->
                     let
                         result =
-                            Dict.get sample model.measures
-                                |> Maybe.andThen (Dict.get test)
-                                |> Maybe.withDefault 0
+                            measure model.setup sample test
 
                         newModel =
-                            { model
-                                | results = model.results ++ [ TestResult sample test result ]
-                            }
+                            { model | results = model.results ++ [ result ] }
                     in
                     ( newModel, Cmd.none )
 
-        ContractClicked contractString ->
+        ContractClicked contract ->
             case model.selectedSample of
                 Nothing ->
                     ( model, Cmd.none )
@@ -151,25 +151,17 @@ update msg model =
                 Just sample ->
                     let
                         result =
-                            Dict.get sample model.contracts
-                                |> Maybe.andThen (Dict.get contractString)
-                                |> Maybe.withDefault False
+                            tryContract model.setup sample contract
+
+                        newModel =
+                            { model | results = model.results ++ [ result ] }
                     in
-                    ( model, Cmd.none )
+                    ( newModel, Cmd.none )
 
         GotGameState s ->
             case s of
-                Ok { measures, answers, contracts } ->
+                Ok ({ measures, answers, contracts } as setup) ->
                     let
-                        okColors =
-                            [ Color.red
-                            , Color.brown
-                            , Color.green
-                            , Color.blue
-                            , Color.purple
-                            , Color.orange
-                            ]
-
                         samples : List Sample
                         samples =
                             Dict.keys measures
@@ -180,6 +172,27 @@ update msg model =
                                 |> List.head
                                 |> Maybe.withDefault Dict.empty
                                 |> Dict.keys
+
+                        foundAnswers : List Answer
+                        foundAnswers =
+                            List.map
+                                (\( sample, answer ) -> Answer sample answer)
+                                (Dict.toList answers)
+
+                        contractNamesAll =
+                            List.map Dict.keys (Dict.values contracts)
+
+                        contractNames =
+                            List.head contractNamesAll |> Maybe.withDefault []
+
+                        okColors =
+                            [ Color.red
+                            , Color.brown
+                            , Color.green
+                            , Color.blue
+                            , Color.purple
+                            , Color.orange
+                            ]
 
                         sampleColoring : Dict Sample Color
                         sampleColoring =
@@ -193,10 +206,10 @@ update msg model =
                             { model
                                 | tests = tests
                                 , samples = samples
-                                , measures = measures
-                                , answers = answers
-                                , contracts = contracts
                                 , sampleColoring = sampleColoring
+                                , contracts = contractNames
+                                , answers = foundAnswers
+                                , setup = setup
                             }
                     in
                     ( newModel, Cmd.none )
@@ -290,13 +303,6 @@ viewTests tests =
 
 
 viewContracts contracts =
-    let
-        contractNamesAll =
-            List.map Dict.keys (Dict.values contracts)
-
-        contractNames =
-            List.head contractNamesAll |> Maybe.withDefault []
-    in
     div sectionAttrs
         [ h1 [] [ text "Contracts" ]
         , viewButtons
@@ -304,7 +310,7 @@ viewContracts contracts =
             , signal = \x -> ContractClicked x
             , style = \_ -> defaultButtonStyle
             }
-            contractNames
+            contracts
         ]
 
 
@@ -320,7 +326,9 @@ viewResults results expanded sampleColoring =
         viewResult res =
             case res of
                 TestResult sample test num ->
-                    li (resultStyle sample) [ text (sample ++ " " ++ test ++ " = " ++ String.fromInt num) ]
+                    li
+                        (resultStyle sample)
+                        [ text (sample ++ " " ++ test ++ " = " ++ String.fromInt num) ]
 
                 ContractResult sample contract p ->
                     let
@@ -331,7 +339,11 @@ viewResults results expanded sampleColoring =
                             else
                                 "NO"
                     in
-                    li (resultStyle sample) [ text (sample ++ " " ++ contract ++ " = " ++ truth) ]
+                    li
+                        (resultStyle sample ++ [ Attrs.style "font-weight" "bold" ])
+                        [ text
+                            (String.join " " [ sample, contract, "=", truth ])
+                        ]
 
         exStyle =
             if expanded == True then
@@ -347,7 +359,11 @@ viewResults results expanded sampleColoring =
                 }
     in
     div [ Attrs.class "footer" ]
-        [ h1 [ onClick ToggleResults ] [ i [ Attrs.class exStyle.arrowClass, Attrs.alt exStyle.arrowAlt ] [], span [] [ text "Results" ] ]
+        [ h1
+            [ onClick ToggleResults ]
+            [ i [ Attrs.class exStyle.arrowClass, Attrs.alt exStyle.arrowAlt ] []
+            , span [] [ text "Results" ]
+            ]
         , ol [ exStyle.disp ]
             (List.map viewResult results)
         ]
@@ -358,10 +374,10 @@ viewAnswers answers =
         [ h1 [] [ text "Answers" ]
         , table [ Attrs.class "answer-table" ]
             (List.map
-                (\( name, answer ) ->
-                    tr [] [ td [] [ span [] [ text name ], span [] [ text answer ] ] ]
+                (\(Answer sample answer) ->
+                    tr [] [ td [] [ span [] [ text sample ], span [] [ text answer ] ] ]
                 )
-                (Dict.toList answers)
+                answers
             )
         ]
 
@@ -435,10 +451,50 @@ fetchConstantGame =
         }
 
 
-constantGameDecoder : D.Decoder GameStateReply
+constantGameDecoder : D.Decoder GameSetup
 constantGameDecoder =
     D.map3
         (\x y z -> { measures = x, answers = y, contracts = z })
         (D.at [ "measures" ] (D.dict (D.dict D.int)))
         (D.at [ "answers" ] (D.dict D.string))
         (D.at [ "contracts" ] (D.dict (D.dict D.bool)))
+
+
+
+-- HIDING API DICTS
+
+
+emptyGameSetup : GameSetup
+emptyGameSetup =
+    { measures = Dict.empty
+    , contracts = Dict.empty
+    , answers = Dict.empty
+    }
+
+
+measure : GameSetup -> Sample -> Test -> SampleResult
+measure setup sample test =
+    TestResult
+        sample
+        test
+        (Dict.get sample setup.measures
+            |> Maybe.andThen (Dict.get test)
+            |> Maybe.withDefault 0
+        )
+
+
+tryContract : GameSetup -> Sample -> Contract -> SampleResult
+tryContract setup sample contract =
+    ContractResult
+        sample
+        contract
+        (Dict.get sample setup.contracts
+            |> Maybe.andThen (Dict.get contract)
+            |> Maybe.withDefault False
+        )
+
+
+getAnswer : GameSetup -> Sample -> String
+getAnswer setup sample =
+    Dict.get sample setup.answers
+        |> Maybe.withDefault "(unknown)"
