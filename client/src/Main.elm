@@ -145,7 +145,11 @@ update msg model =
                             model.setup.measure sample test
 
                         newModel =
-                            { model | results = model.results ++ [ result ] }
+                            if List.length (List.filter (\x -> x == result) model.results) > 0 then
+                                model
+
+                            else
+                                { model | results = model.results ++ [ result ] }
                     in
                     ( newModel, Cmd.none )
 
@@ -160,7 +164,11 @@ update msg model =
                             model.setup.tryContract sample contract
 
                         newModel =
-                            { model | results = model.results ++ [ result ] }
+                            if List.length (List.filter (\x -> x == result) model.results) > 0 then
+                                model
+
+                            else
+                                { model | results = model.results ++ [ result ] }
                     in
                     ( newModel, Cmd.none )
 
@@ -273,7 +281,7 @@ view model =
     div [] <|
         [ viewSamples model.samples model.selectedSample model.sampleColoring
         , viewTests model.tests
-        , viewContracts model.contracts
+        , viewContracts model.contracts model.results model.sampleColoring
         , viewResults model.results model.resultsExpanded model.sampleColoring
         , a [ Attrs.class "outer", onClick ToggleAnswers ] [ text showp ]
         ]
@@ -340,15 +348,61 @@ viewTests tests =
         ]
 
 
-viewContracts contracts =
+viewContracts contracts results sampleColoring =
+    let
+        getColor : Sample -> Color
+        getColor =
+            colorForSample sampleColoring
+
+        yesses contract =
+            List.filterMap
+                (\res ->
+                    case res of
+                        ContractResult sample contract_ val ->
+                            if val == True && contract == contract_ then
+                                Just sample
+
+                            else
+                                Nothing
+
+                        _ ->
+                            Nothing
+                )
+                results
+
+        noes contract =
+            List.filterMap
+                (\res ->
+                    case res of
+                        ContractResult sample contract_ val ->
+                            if val == False && contract == contract_ then
+                                Just sample
+
+                            else
+                                Nothing
+
+                        _ ->
+                            Nothing
+                )
+                results
+
+        viewContract contract =
+            let
+                yesOutput =
+                    List.map (\sample -> icon "fas fa-check" (getColor sample)) (yesses contract)
+
+                noOutput =
+                    List.map (\sample -> icon "fas fa-times" (getColor sample)) (noes contract)
+            in
+            div
+                [ Attrs.class "contract", onClick (ContractClicked contract) ]
+                [ text contract
+                , span [] (yesOutput ++ noOutput)
+                ]
+    in
     section []
         [ h1 [] [ text "Contracts" ]
-        , viewButtons
-            { caption = \x -> x
-            , signal = \x -> ContractClicked x
-            , style = \_ -> defaultButtonStyle
-            }
-            contracts
+        , div [] (List.map viewContract contracts)
         ]
 
 
@@ -386,20 +440,18 @@ viewResults results expanded sampleColoring =
         exStyle =
             if expanded == True then
                 { arrowClass = "fas fa-angle-down"
-                , arrowAlt = "Collapse"
                 , disp = Attrs.style "display" "block"
                 }
 
             else
                 { arrowClass = "fas fa-angle-up"
-                , arrowAlt = "Expand"
                 , disp = Attrs.style "display" "none"
                 }
     in
     div [ Attrs.class "footer" ]
         [ h1
             [ onClick ToggleResults ]
-            [ i [ Attrs.class exStyle.arrowClass, Attrs.alt exStyle.arrowAlt ] []
+            [ icon exStyle.arrowClass Color.black
             , span [] [ text "Results" ]
             ]
         , ol [ exStyle.disp ]
@@ -474,7 +526,11 @@ viewButtons { caption, signal, style } buttons =
 
 viewButton : String -> List (Attribute Msg) -> Msg -> Html Msg
 viewButton txt buttonStyle signal =
-    a (buttonStyle ++ [ onClick signal ]) [ text txt ]
+    span (buttonStyle ++ [ onClick signal ]) [ text txt ]
+
+
+icon class color =
+    i [ Attrs.class class, fgColor color, Attrs.alt "" ] []
 
 
 
