@@ -256,9 +256,9 @@ def truth_frequencies(contracts, values):
     return (truth_freq_by_val, truth_freq_by_contract)
 
 
-def evaluate_candidate_contracts(truth_freq_by_val, truth_freq_by_contract):
-    values = truth_freq_by_val.keys()
-    contracts = truth_freq_by_contract.keys()
+def evaluate_candidate_contracts(contracts, values):
+    (truth_freq_by_val, truth_freq_by_contract) = \
+        truth_frequencies(contracts, values)
 
     no_universal_values = \
         not any(v == len(contracts) for v in truth_freq_by_val.values())
@@ -306,7 +306,7 @@ def select_reasonable_contracts(seqs, qs, num_contracts):
     for contracts in candidate_contracts:
         (truth_by_val, truth_by_contract) = \
             truth_frequencies(contracts, qs.values())
-        if not evaluate_candidate_contracts(truth_by_val, truth_by_contract):
+        if not evaluate_candidate_contracts(contracts, qs.values()):
             continue
         contracts_matching_all = [
             contract for contract in contracts
@@ -314,7 +314,9 @@ def select_reasonable_contracts(seqs, qs, num_contracts):
         ]
         if not contracts_matching_all:
             return contracts
+        adjusted = []
         while contracts_matching_all:
+            old_adjusted = adjusted
             adjusted = [
                 (
                     next(random_contracts(seqs))
@@ -323,16 +325,28 @@ def select_reasonable_contracts(seqs, qs, num_contracts):
                 )
                 for contract in contracts
             ]
+            # If we accidentally invalidated `evaluate_candidate_contracts`
+            # with our adjustment, but the adjustment removed any contracts
+            # matching all, we're stuck because this loop is only trying to
+            # adjust for contracts matching all.  We need to break out and get
+            # a fresh set of candidates.
+            if old_adjusted == adjusted:
+                break
             (truth_by_val, truth_by_contract) = \
                 truth_frequencies(adjusted, qs.values())
-            if not evaluate_candidate_contracts(truth_by_val, truth_by_contract):
+            if not evaluate_candidate_contracts(contracts, qs.values()):
                 continue
             contracts_matching_all = [
                 contract for contract in adjusted
                 if truth_by_contract[contract] == num_samples
             ]
-        # We have to get here eventually
-        return adjusted
+        # If we did not break, we made it out of the loop successfully.  Return
+        # the working adjusted value
+        else:
+            return adjusted
+        # If we got out of the loop by breaking, it means we got stuck.  Try
+        # again with a fresh set of candidates
+        continue
 
 
 def game_json(alphabet, length, num_samples, num_contracts):
