@@ -80,7 +80,7 @@ initialModel =
     , answers = Dict.empty
     , contracts = Dict.empty
     , answersRevealed = False
-    , money = 0
+    , money = 100
     , selectedSample = Nothing
     , resultsExpanded = True
     }
@@ -88,17 +88,30 @@ initialModel =
 
 type Msg
     = Noop
+    | GotGameState (Result Http.Error GameStateReply)
     | SampleClicked Sample
     | TestClicked Test
     | ContractClicked String
-    | GotGameState (Result Http.Error GameStateReply)
-    | ShowAnswers
-    | HideAnswers
+    | ToggleAnswers
     | ToggleResults
 
 
 
 -- UPDATE
+
+
+pickOrToggle : Maybe a -> a -> Maybe a
+pickOrToggle match value =
+    case match of
+        Nothing ->
+            Just value
+
+        Just match_ ->
+            if match_ == value then
+                Nothing
+
+            else
+                Just value
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -108,16 +121,7 @@ update msg model =
             ( model, Cmd.none )
 
         SampleClicked sample ->
-            case model.selectedSample of
-                Nothing ->
-                    ( { model | selectedSample = Just sample }, Cmd.none )
-
-                Just sample_ ->
-                    if sample_ == sample then
-                        ( { model | selectedSample = Nothing }, Cmd.none )
-
-                    else
-                        ( { model | selectedSample = Just sample }, Cmd.none )
+            ( { model | selectedSample = pickOrToggle model.selectedSample sample }, Cmd.none )
 
         TestClicked test ->
             case model.selectedSample of
@@ -126,15 +130,17 @@ update msg model =
 
                 Just sample ->
                     let
+                        result =
+                            Dict.get sample model.measures
+                                |> Maybe.andThen (Dict.get test)
+                                |> Maybe.withDefault 0
+                                |> String.fromInt
+
                         newModel =
-                            let
-                                result =
-                                    Dict.get sample model.measures
-                                        |> Maybe.andThen (Dict.get test)
-                                        |> Maybe.withDefault 0
-                                        |> String.fromInt
-                            in
-                            { model | selectedSample = Nothing, results = model.results ++ [ ( sample, test, result ) ] }
+                            { model
+                                | selectedSample = Nothing
+                                , results = model.results ++ [ ( sample, test, result ) ]
+                            }
                     in
                     ( newModel, Cmd.none )
 
@@ -145,16 +151,12 @@ update msg model =
 
                 Just sample ->
                     let
-                        newModel =
-                            let
-                                result =
-                                    Dict.get sample model.contracts
-                                        |> Maybe.andThen (Dict.get contractString)
-                                        |> Maybe.withDefault False
+                        result =
+                            Dict.get sample model.contracts
+                                |> Maybe.andThen (Dict.get contractString)
+                                |> Maybe.withDefault False
 
-                                _ =
-                                    log "result " result
-                            in
+                        newModel =
                             { model | selectedSample = Nothing }
                     in
                     ( newModel, Cmd.none )
@@ -164,7 +166,13 @@ update msg model =
                 Ok { measures, answers, contracts } ->
                     let
                         okColors =
-                            [ Color.red, Color.brown, Color.green, Color.blue, Color.purple, Color.orange ]
+                            [ Color.red
+                            , Color.brown
+                            , Color.green
+                            , Color.blue
+                            , Color.purple
+                            , Color.orange
+                            ]
 
                         samples : List Sample
                         samples =
@@ -201,19 +209,11 @@ update msg model =
                     -- Do nothing
                     ( model, Cmd.none )
 
-        ShowAnswers ->
-            ( { model | answersRevealed = True }, Cmd.none )
-
-        HideAnswers ->
-            ( { model | answersRevealed = False }, Cmd.none )
+        ToggleAnswers ->
+            ( { model | answersRevealed = not model.answersRevealed }, Cmd.none )
 
         ToggleResults ->
-            case model.resultsExpanded of
-                True ->
-                    ( { model | resultsExpanded = False }, Cmd.none )
-
-                False ->
-                    ( { model | resultsExpanded = True }, Cmd.none )
+            ( { model | resultsExpanded = not model.resultsExpanded }, Cmd.none )
 
 
 
@@ -229,20 +229,13 @@ view model =
 
             else
                 "reveal"
-
-        showm =
-            if model.answersRevealed == True then
-                HideAnswers
-
-            else
-                ShowAnswers
     in
     div [] <|
         [ viewSamples model.samples model.selectedSample model.sampleColoring
         , viewTests model.tests
         , viewResults model.results model.resultsExpanded model.sampleColoring
         , viewContracts model.contracts
-        , a [ Attrs.class "outer", onClick showm ] [ text <| "(" ++ showp ++ " answers)" ]
+        , a [ Attrs.class "outer", onClick ToggleAnswers ] [ text <| "(" ++ showp ++ " answers)" ]
         ]
             ++ (if model.answersRevealed == True then
                     [ viewAnswers model.answers ]
@@ -320,9 +313,12 @@ viewResults results expanded sampleColoring =
         getColor sample =
             Dict.get sample sampleColoring |> Maybe.withDefault Color.black
 
+        resultStyle sample =
+            [ Attrs.class "outer", Attrs.style "color" (Color.toCssString <| getColor sample) ]
+
         viewResult : ( Sample, Test, TestResult ) -> Html Msg
         viewResult ( sample, test, result ) =
-            li [ Attrs.class "outer", Attrs.style "color" (Color.toCssString <| getColor sample) ] [ text (sample ++ " " ++ test ++ " = " ++ result) ]
+            li (resultStyle sample) [ text (sample ++ " " ++ test ++ " = " ++ result) ]
 
         exStyle =
             if expanded == True then
@@ -347,10 +343,10 @@ viewResults results expanded sampleColoring =
 viewAnswers answers =
     div sectionAttrs
         [ h1 [] [ text "Answers" ]
-        , table []
+        , table [ Attrs.class "answer-table" ]
             (List.map
                 (\( name, answer ) ->
-                    tr [] [ td [] [ text name ], td [] [ text answer ] ]
+                    tr [] [ td [] [ span [] [ text name ], span [] [ text answer ] ] ]
                 )
                 (Dict.toList answers)
             )

@@ -56,7 +56,11 @@
 }
 
 .footer-space {
-    height: 100px;
+    height: 500px;
     float: left;
     clear: both;
+}
+
+.answer-table span {
+    margin: 10px;
 }
