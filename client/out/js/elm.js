@@ -5327,6 +5327,7 @@ var $elm$json$Json$Decode$at = F2(
 	function (fields, decoder) {
 		return A3($elm$core$List$foldr, $elm$json$Json$Decode$field, decoder, fields);
 	});
+var $elm$json$Json$Decode$bool = _Json_decodeBool;
 var $elm$core$Dict$RBEmpty_elm_builtin = {$: 'RBEmpty_elm_builtin'};
 var $elm$core$Dict$empty = $elm$core$Dict$RBEmpty_elm_builtin;
 var $elm$core$Dict$Black = {$: 'Black'};
@@ -5458,61 +5459,31 @@ var $elm$json$Json$Decode$dict = function (decoder) {
 		$elm$json$Json$Decode$keyValuePairs(decoder));
 };
 var $elm$json$Json$Decode$int = _Json_decodeInt;
-var $elm$json$Json$Decode$list = _Json_decodeList;
-var $elm$json$Json$Decode$map4 = _Json_map4;
+var $elm$json$Json$Decode$map3 = _Json_map3;
 var $elm$json$Json$Decode$string = _Json_decodeString;
-var $author$project$Main$constantGameDecoder = function () {
-	var nameToTest = A3(
-		$elm$json$Json$Decode$map2,
-		function (x) {
-			return function (y) {
-				return {id: y, text: x};
-			};
-		},
-		$elm$json$Json$Decode$string,
-		$elm$json$Json$Decode$string);
-	var nameToSample = A3(
-		$elm$json$Json$Decode$map2,
-		function (x) {
-			return function (y) {
-				return {id: y, text: x};
-			};
-		},
-		$elm$json$Json$Decode$string,
-		$elm$json$Json$Decode$string);
-	return A5(
-		$elm$json$Json$Decode$map4,
-		function (x) {
-			return function (y) {
-				return function (z) {
-					return function (w) {
-						return {answers: w, measures: z, samples: y, tests: x};
-					};
-				};
-			};
-		},
-		A2(
-			$elm$json$Json$Decode$at,
-			_List_fromArray(
-				['tests']),
-			$elm$json$Json$Decode$list(nameToTest)),
-		A2(
-			$elm$json$Json$Decode$at,
-			_List_fromArray(
-				['samples']),
-			$elm$json$Json$Decode$list(nameToSample)),
-		A2(
-			$elm$json$Json$Decode$at,
-			_List_fromArray(
-				['measures']),
-			$elm$json$Json$Decode$dict(
-				$elm$json$Json$Decode$dict($elm$json$Json$Decode$int))),
-		A2(
-			$elm$json$Json$Decode$at,
-			_List_fromArray(
-				['answers']),
-			$elm$json$Json$Decode$dict($elm$json$Json$Decode$string)));
-}();
+var $author$project$Main$constantGameDecoder = A4(
+	$elm$json$Json$Decode$map3,
+	F3(
+		function (x, y, z) {
+			return {answers: y, contracts: z, measures: x};
+		}),
+	A2(
+		$elm$json$Json$Decode$at,
+		_List_fromArray(
+			['measures']),
+		$elm$json$Json$Decode$dict(
+			$elm$json$Json$Decode$dict($elm$json$Json$Decode$int))),
+	A2(
+		$elm$json$Json$Decode$at,
+		_List_fromArray(
+			['answers']),
+		$elm$json$Json$Decode$dict($elm$json$Json$Decode$string)),
+	A2(
+		$elm$json$Json$Decode$at,
+		_List_fromArray(
+			['contracts']),
+		$elm$json$Json$Decode$dict(
+			$elm$json$Json$Decode$dict($elm$json$Json$Decode$bool))));
 var $elm$json$Json$Decode$decodeString = _Json_runOnString;
 var $elm$http$Http$BadStatus_ = F2(
 	function (a, b) {
@@ -6194,18 +6165,7 @@ var $author$project$Main$fetchConstantGame = $elm$http$Http$get(
 		expect: A2($elm$http$Http$expectJson, $author$project$Main$GotGameState, $author$project$Main$constantGameDecoder),
 		url: 'game.json'
 	});
-var $author$project$Main$initialModel = {
-	answers: $elm$core$Dict$fromList(_List_Nil),
-	answersRevealed: false,
-	contracts: _List_Nil,
-	measures: $elm$core$Dict$fromList(_List_Nil),
-	money: 0,
-	results: _List_Nil,
-	resultsExpanded: true,
-	samples: _List_Nil,
-	selectedSample: $elm$core$Maybe$Nothing,
-	tests: _List_Nil
-};
+var $author$project$Main$initialModel = {answers: $elm$core$Dict$empty, answersRevealed: false, contracts: $elm$core$Dict$empty, measures: $elm$core$Dict$empty, money: 0, results: _List_Nil, resultsExpanded: true, sampleColoring: $elm$core$Dict$empty, samples: _List_Nil, selectedSample: $elm$core$Maybe$Nothing, tests: _List_Nil};
 var $author$project$Main$init = function (_v0) {
 	return _Utils_Tuple2($author$project$Main$initialModel, $author$project$Main$fetchConstantGame);
 };
@@ -6223,8 +6183,42 @@ var $elm$core$Maybe$andThen = F2(
 			return $elm$core$Maybe$Nothing;
 		}
 	});
+var $avh4$elm_color$Color$RgbaSpace = F4(
+	function (a, b, c, d) {
+		return {$: 'RgbaSpace', a: a, b: b, c: c, d: d};
+	});
+var $avh4$elm_color$Color$blue = A4($avh4$elm_color$Color$RgbaSpace, 52 / 255, 101 / 255, 164 / 255, 1.0);
+var $avh4$elm_color$Color$brown = A4($avh4$elm_color$Color$RgbaSpace, 193 / 255, 125 / 255, 17 / 255, 1.0);
+var $avh4$elm_color$Color$green = A4($avh4$elm_color$Color$RgbaSpace, 115 / 255, 210 / 255, 22 / 255, 1.0);
+var $elm$core$List$head = function (list) {
+	if (list.b) {
+		var x = list.a;
+		var xs = list.b;
+		return $elm$core$Maybe$Just(x);
+	} else {
+		return $elm$core$Maybe$Nothing;
+	}
+};
+var $elm$core$Debug$log = _Debug_log;
 var $elm$core$Platform$Cmd$batch = _Platform_batch;
 var $elm$core$Platform$Cmd$none = $elm$core$Platform$Cmd$batch(_List_Nil);
+var $avh4$elm_color$Color$orange = A4($avh4$elm_color$Color$RgbaSpace, 245 / 255, 121 / 255, 0 / 255, 1.0);
+var $elm$core$Tuple$pair = F2(
+	function (a, b) {
+		return _Utils_Tuple2(a, b);
+	});
+var $avh4$elm_color$Color$purple = A4($avh4$elm_color$Color$RgbaSpace, 117 / 255, 80 / 255, 123 / 255, 1.0);
+var $avh4$elm_color$Color$red = A4($avh4$elm_color$Color$RgbaSpace, 204 / 255, 0 / 255, 0 / 255, 1.0);
+var $elm$core$Dict$values = function (dict) {
+	return A3(
+		$elm$core$Dict$foldr,
+		F3(
+			function (key, value, valueList) {
+				return A2($elm$core$List$cons, value, valueList);
+			}),
+		_List_Nil,
+		dict);
+};
 var $elm$core$Maybe$withDefault = F2(
 	function (_default, maybe) {
 		if (maybe.$ === 'Just') {
@@ -6278,8 +6272,8 @@ var $author$project$Main$update = F2(
 								0,
 								A2(
 									$elm$core$Maybe$andThen,
-									$elm$core$Dict$get(test.id),
-									A2($elm$core$Dict$get, sample.id, model.measures))));
+									$elm$core$Dict$get(test),
+									A2($elm$core$Dict$get, sample, model.measures))));
 						return _Utils_update(
 							model,
 							{
@@ -6294,18 +6288,49 @@ var $author$project$Main$update = F2(
 					}();
 					return _Utils_Tuple2(newModel, $elm$core$Platform$Cmd$none);
 				}
+			case 'ContractClicked':
+				var contractString = msg.a;
+				var _v3 = model.selectedSample;
+				if (_v3.$ === 'Nothing') {
+					return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
+				} else {
+					var sample = _v3.a;
+					var newModel = function () {
+						var result = A2(
+							$elm$core$Maybe$withDefault,
+							false,
+							A2(
+								$elm$core$Maybe$andThen,
+								$elm$core$Dict$get(contractString),
+								A2($elm$core$Dict$get, sample, model.contracts)));
+						var _v4 = A2($elm$core$Debug$log, 'result ', result);
+						return _Utils_update(
+							model,
+							{selectedSample: $elm$core$Maybe$Nothing});
+					}();
+					return _Utils_Tuple2(newModel, $elm$core$Platform$Cmd$none);
+				}
 			case 'GotGameState':
 				var s = msg.a;
 				if (s.$ === 'Ok') {
-					var tests = s.a.tests;
-					var samples = s.a.samples;
 					var measures = s.a.measures;
 					var answers = s.a.answers;
-					return _Utils_Tuple2(
-						_Utils_update(
-							model,
-							{answers: answers, measures: measures, samples: samples, tests: tests}),
-						$elm$core$Platform$Cmd$none);
+					var contracts = s.a.contracts;
+					var tests = $elm$core$Dict$keys(
+						A2(
+							$elm$core$Maybe$withDefault,
+							$elm$core$Dict$empty,
+							$elm$core$List$head(
+								$elm$core$Dict$values(measures))));
+					var samples = $elm$core$Dict$keys(measures);
+					var okColors = _List_fromArray(
+						[$avh4$elm_color$Color$red, $avh4$elm_color$Color$brown, $avh4$elm_color$Color$green, $avh4$elm_color$Color$blue, $avh4$elm_color$Color$purple, $avh4$elm_color$Color$orange]);
+					var sampleColoring = $elm$core$Dict$fromList(
+						A3($elm$core$List$map2, $elm$core$Tuple$pair, samples, okColors));
+					var newModel = _Utils_update(
+						model,
+						{answers: answers, contracts: contracts, measures: measures, sampleColoring: sampleColoring, samples: samples, tests: tests});
+					return _Utils_Tuple2(newModel, $elm$core$Platform$Cmd$none);
 				} else {
 					var e = s.a;
 					return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
@@ -6323,8 +6348,8 @@ var $author$project$Main$update = F2(
 						{answersRevealed: false}),
 					$elm$core$Platform$Cmd$none);
 			default:
-				var _v4 = model.resultsExpanded;
-				if (_v4) {
+				var _v6 = model.resultsExpanded;
+				if (_v6) {
 					return _Utils_Tuple2(
 						_Utils_update(
 							model,
@@ -6352,12 +6377,6 @@ var $elm$html$Html$Attributes$stringProperty = F2(
 	});
 var $elm$html$Html$Attributes$class = $elm$html$Html$Attributes$stringProperty('className');
 var $elm$html$Html$div = _VirtualDom_node('div');
-var $elm$html$Html$Attributes$href = function (url) {
-	return A2(
-		$elm$html$Html$Attributes$stringProperty,
-		'href',
-		_VirtualDom_noJavaScriptUri(url));
-};
 var $elm$virtual_dom$VirtualDom$Normal = function (a) {
 	return {$: 'Normal', a: a};
 };
@@ -6430,6 +6449,88 @@ var $author$project$Main$viewAnswers = function (answers) {
 					$elm$core$Dict$toList(answers)))
 			]));
 };
+var $author$project$Main$ContractClicked = function (a) {
+	return {$: 'ContractClicked', a: a};
+};
+var $author$project$Main$defaultButtonStyle = _List_fromArray(
+	[
+		$elm$html$Html$Attributes$class('button')
+	]);
+var $author$project$Main$viewButton = F3(
+	function (txt, buttonStyle, signal) {
+		return A2(
+			$elm$html$Html$a,
+			_Utils_ap(
+				buttonStyle,
+				_List_fromArray(
+					[
+						$elm$html$Html$Events$onClick(signal)
+					])),
+			_List_fromArray(
+				[
+					$elm$html$Html$text(txt)
+				]));
+	});
+var $author$project$Main$viewButtons = F2(
+	function (_v0, buttons) {
+		var caption = _v0.caption;
+		var signal = _v0.signal;
+		var style = _v0.style;
+		return A2(
+			$elm$html$Html$div,
+			_List_fromArray(
+				[
+					$elm$html$Html$Attributes$class('section')
+				]),
+			A2(
+				$elm$core$List$map,
+				function (x) {
+					return A3(
+						$author$project$Main$viewButton,
+						caption(x),
+						style(x),
+						signal(x));
+				},
+				buttons));
+	});
+var $author$project$Main$viewContracts = function (contracts) {
+	var contractNamesAll = A2(
+		$elm$core$List$map,
+		$elm$core$Dict$keys,
+		$elm$core$Dict$values(contracts));
+	var contractNames = A2(
+		$elm$core$Maybe$withDefault,
+		_List_Nil,
+		$elm$core$List$head(contractNamesAll));
+	return A2(
+		$elm$html$Html$div,
+		$author$project$Main$sectionAttrs,
+		_List_fromArray(
+			[
+				A2(
+				$elm$html$Html$h1,
+				_List_Nil,
+				_List_fromArray(
+					[
+						$elm$html$Html$text('Contracts')
+					])),
+				A2(
+				$author$project$Main$viewButtons,
+				{
+					caption: function (x) {
+						return x;
+					},
+					signal: function (x) {
+						return $author$project$Main$ContractClicked(x);
+					},
+					style: function (_v0) {
+						return $author$project$Main$defaultButtonStyle;
+					}
+				},
+				contractNames)
+			]));
+};
+var $elm$html$Html$b = _VirtualDom_node('b');
 var $elm$html$Html$h2 = _VirtualDom_node('h2');
 var $elm$html$Html$hr = _VirtualDom_node('hr');
 var $elm$html$Html$li = _VirtualDom_node('li');
@@ -6485,7 +6586,7 @@ var $author$project$Main$viewInstructions = A2(
 					_List_Nil,
 					_List_fromArray(
 						[
-							$elm$html$Html$text('The samples are each secret 5-letter strings made of A, B, C, and D.  The samples are named randomly; the name has no relation to their underlying composition!')
+							$elm$html$Html$text('The samples are each secret 5-letter strings made of A, B, C, and D.')
 						]))
 				])),
 			A2(
@@ -6510,28 +6611,105 @@ var $author$project$Main$viewInstructions = A2(
 							_List_Nil,
 							_List_fromArray(
 								[
-									$elm$html$Html$text('A - Number of times A appears at any position in the sample')
+									A2(
+									$elm$html$Html$b,
+									_List_Nil,
+									_List_fromArray(
+										[
+											$elm$html$Html$text('A - ')
+										])),
+									$elm$html$Html$text('Number of times A appears at any position in the sample.  (E.G. C = 2 means there are 2 C\'s in the sample)')
 								])),
 							A2(
 							$elm$html$Html$li,
 							_List_Nil,
 							_List_fromArray(
 								[
-									$elm$html$Html$text('AA - Number of times A appears in a set of TWO OR MORE anywhere in the sample')
+									A2(
+									$elm$html$Html$b,
+									_List_Nil,
+									_List_fromArray(
+										[
+											$elm$html$Html$text('AA - ')
+										])),
+									$elm$html$Html$text('Number of times A appears twice in a row.  (E.G. AA = 1 for \'AABBB\', AA = 2 for \'AAABB\')')
 								])),
 							A2(
 							$elm$html$Html$li,
 							_List_Nil,
 							_List_fromArray(
 								[
-									$elm$html$Html$text('AB - Number of times AB appears in that order anywhere in the sample')
+									A2(
+									$elm$html$Html$b,
+									_List_Nil,
+									_List_fromArray(
+										[
+											$elm$html$Html$text('AB - ')
+										])),
+									$elm$html$Html$text('Number of times AB appears in that order anywhere in the sample  (E.G. CD is in the samples \'ACDCB\' and \'CDDDD\', but not \'DCBBB\' or \'CCCBD\')')
 								])),
 							A2(
 							$elm$html$Html$li,
 							_List_Nil,
 							_List_fromArray(
 								[
-									$elm$html$Html$text('.AAA. - Number of A\'s present in the central 3 positions of the string')
+									A2(
+									$elm$html$Html$b,
+									_List_Nil,
+									_List_fromArray(
+										[
+											$elm$html$Html$text('AAA.. - ')
+										])),
+									$elm$html$Html$text('Number of A\'s present in the first 3 positions of the string')
+								])),
+							A2(
+							$elm$html$Html$li,
+							_List_Nil,
+							_List_fromArray(
+								[
+									A2(
+									$elm$html$Html$b,
+									_List_Nil,
+									_List_fromArray(
+										[
+											$elm$html$Html$text('.AAA. - ')
+										])),
+									$elm$html$Html$text('Number of A\'s present in the central 3 positions of the string')
+								])),
+							A2(
+							$elm$html$Html$li,
+							_List_Nil,
+							_List_fromArray(
+								[
+									A2(
+									$elm$html$Html$b,
+									_List_Nil,
+									_List_fromArray(
+										[
+											$elm$html$Html$text('..AAA - ')
+										])),
+									$elm$html$Html$text('Number of A\'s present in the final 3 positions of the string')
+								])),
+							A2(
+							$elm$html$Html$li,
+							_List_Nil,
+							_List_fromArray(
+								[
+									A2(
+									$elm$html$Html$b,
+									_List_Nil,
+									_List_fromArray(
+										[
+											$elm$html$Html$text('A.A.A - ')
+										])),
+									$elm$html$Html$text('Number of A\'s present in the 3 string positions indicated')
+								])),
+							A2(
+							$elm$html$Html$li,
+							_List_Nil,
+							_List_fromArray(
+								[
+									$elm$html$Html$text('(Other tests with periods are similar: periods represent \'anything\', and the letters mark places where the letter is being counted)')
 								]))
 						]))
 				])),
@@ -6572,26 +6750,72 @@ var $author$project$Main$viewInstructions = A2(
 		]));
 var $author$project$Main$ToggleResults = {$: 'ToggleResults'};
 var $elm$html$Html$Attributes$alt = $elm$html$Html$Attributes$stringProperty('alt');
+var $avh4$elm_color$Color$black = A4($avh4$elm_color$Color$RgbaSpace, 0 / 255, 0 / 255, 0 / 255, 1.0);
 var $elm$html$Html$i = _VirtualDom_node('i');
 var $elm$html$Html$ol = _VirtualDom_node('ol');
 var $elm$html$Html$span = _VirtualDom_node('span');
 var $elm$virtual_dom$VirtualDom$style = _VirtualDom_style;
 var $elm$html$Html$Attributes$style = $elm$virtual_dom$VirtualDom$style;
-var $author$project$Main$viewResults = F2(
-	function (results, expanded) {
+var $elm$core$String$concat = function (strings) {
+	return A2($elm$core$String$join, '', strings);
+};
+var $elm$core$String$fromFloat = _String_fromNumber;
+var $elm$core$Basics$round = _Basics_round;
+var $avh4$elm_color$Color$toCssString = function (_v0) {
+	var r = _v0.a;
+	var g = _v0.b;
+	var b = _v0.c;
+	var a = _v0.d;
+	var roundTo = function (x) {
+		return $elm$core$Basics$round(x * 1000) / 1000;
+	};
+	var pct = function (x) {
+		return $elm$core$Basics$round(x * 10000) / 100;
+	};
+	return $elm$core$String$concat(
+		_List_fromArray(
+			[
+				'rgba(',
+				$elm$core$String$fromFloat(
+				pct(r)),
+				'%,',
+				$elm$core$String$fromFloat(
+				pct(g)),
+				'%,',
+				$elm$core$String$fromFloat(
+				pct(b)),
+				'%,',
+				$elm$core$String$fromFloat(
+				roundTo(a)),
+				')'
+			]));
+};
+var $author$project$Main$viewResults = F3(
+	function (results, expanded, sampleColoring) {
+		var getColor = function (sample) {
+			return A2(
+				$elm$core$Maybe$withDefault,
+				$avh4$elm_color$Color$black,
+				A2($elm$core$Dict$get, sample, sampleColoring));
+		};
 		var viewResult = function (_v0) {
 			var sample = _v0.a;
 			var test = _v0.b;
-			var r = _v0.c;
+			var result = _v0.c;
 			return A2(
 				$elm$html$Html$li,
 				_List_fromArray(
 					[
-						$elm$html$Html$Attributes$class('outer')
+						$elm$html$Html$Attributes$class('outer'),
+						A2(
+						$elm$html$Html$Attributes$style,
+						'color',
+						$avh4$elm_color$Color$toCssString(
+							getColor(sample)))
 					]),
 				_List_fromArray(
 					[
-						$elm$html$Html$text(sample.text + (' ' + (test.text + (' = ' + r))))
+						$elm$html$Html$text(sample + (' ' + (test + (' = ' + result))))
 					]));
 		};
 		var exStyle = expanded ? {
@@ -6645,55 +6869,20 @@ var $author$project$Main$viewResults = F2(
 var $author$project$Main$SampleClicked = function (a) {
 	return {$: 'SampleClicked', a: a};
 };
-var $author$project$Main$defaultButtonStyle = _List_fromArray(
-	[
-		$elm$html$Html$Attributes$class('button')
-	]);
 var $author$project$Main$selectedButtonStyle = _Utils_ap(
 	$author$project$Main$defaultButtonStyle,
 	_List_fromArray(
 		[
 			$elm$html$Html$Attributes$class('bordered')
 		]));
-var $author$project$Main$viewButton = F3(
-	function (txt, buttonStyle, signal) {
-		return A2(
-			$elm$html$Html$a,
-			_Utils_ap(
-				buttonStyle,
-				_List_fromArray(
-					[
-						$elm$html$Html$Events$onClick(signal)
-					])),
-			_List_fromArray(
-				[
-					$elm$html$Html$text(txt)
-				]));
-	});
-var $author$project$Main$viewButtons = F2(
-	function (_v0, buttons) {
-		var caption = _v0.caption;
-		var signal = _v0.signal;
-		var style = _v0.style;
-		return A2(
-			$elm$html$Html$div,
-			_List_fromArray(
-				[
-					$elm$html$Html$Attributes$class('section')
-				]),
-			A2(
-				$elm$core$List$map,
-				function (x) {
-					return A3(
-						$author$project$Main$viewButton,
-						caption(x),
-						style(x),
-						signal(x));
-				},
-				buttons));
-	});
-var $author$project$Main$viewSamples = F2(
-	function (samples, selectedSample) {
+var $author$project$Main$viewSamples = F3(
+	function (samples, selectedSample, sampleColoring) {
+		var getColor = function (sample) {
+			return A2(
+				$elm$core$Maybe$withDefault,
+				$avh4$elm_color$Color$black,
+				A2($elm$core$Dict$get, sample, sampleColoring));
+		};
 		return A2(
 			$elm$html$Html$div,
 			$author$project$Main$sectionAttrs,
@@ -6710,17 +6899,44 @@ var $author$project$Main$viewSamples = F2(
 					$author$project$Main$viewButtons,
 					{
 						caption: function (x) {
-							return x.text;
+							return x;
 						},
 						signal: function (x) {
 							return $author$project$Main$SampleClicked(x);
 						},
 						style: function (x) {
 							if (selectedSample.$ === 'Nothing') {
-								return $author$project$Main$defaultButtonStyle;
+								return _Utils_ap(
+									$author$project$Main$defaultButtonStyle,
+									_List_fromArray(
+										[
+											A2(
+											$elm$html$Html$Attributes$style,
+											'background',
+											$avh4$elm_color$Color$toCssString(
+												getColor(x)))
+										]));
 							} else {
 								var selectedSample_ = selectedSample.a;
-								return _Utils_eq(x.id, selectedSample_.id) ? $author$project$Main$selectedButtonStyle : $author$project$Main$defaultButtonStyle;
+								return _Utils_eq(x, selectedSample_) ? _Utils_ap(
+									$author$project$Main$selectedButtonStyle,
+									_List_fromArray(
+										[
+											A2(
+											$elm$html$Html$Attributes$style,
+											'background',
+											$avh4$elm_color$Color$toCssString(
+												getColor(x)))
+										])) : _Utils_ap(
+									$author$project$Main$defaultButtonStyle,
+									_List_fromArray(
+										[
+											A2(
+											$elm$html$Html$Attributes$style,
+											'background',
+											$avh4$elm_color$Color$toCssString(
+												getColor(x)))
+										]));
 							}
 						}
 					},
@@ -6747,7 +6963,7 @@ var $author$project$Main$viewTests = function (tests) {
 				$author$project$Main$viewButtons,
 				{
 					caption: function (x) {
-						return x.text;
+						return x;
 					},
 					signal: function (x) {
 						return $author$project$Main$TestClicked(x);
@@ -6768,15 +6984,15 @@ var $author$project$Main$view = function (model) {
 		_Utils_ap(
 			_List_fromArray(
 				[
-					A2($author$project$Main$viewSamples, model.samples, model.selectedSample),
+					A3($author$project$Main$viewSamples, model.samples, model.selectedSample, model.sampleColoring),
 					$author$project$Main$viewTests(model.tests),
-					A2($author$project$Main$viewResults, model.results, model.resultsExpanded),
+					A3($author$project$Main$viewResults, model.results, model.resultsExpanded, model.sampleColoring),
+					$author$project$Main$viewContracts(model.contracts),
 					A2(
 					$elm$html$Html$a,
 					_List_fromArray(
 						[
 							$elm$html$Html$Attributes$class('outer'),
-							$elm$html$Html$Attributes$href('#'),
 							$elm$html$Html$Events$onClick(showm)
 						]),
 					_List_fromArray(
