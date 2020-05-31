@@ -20,6 +20,7 @@ from cytoolz import curry
 from cytoolz import dissoc
 from cytoolz import juxt
 from cytoolz import sliding_window
+from cytoolz import take
 
 #
 # Constants
@@ -201,7 +202,7 @@ def _random_comparison(max_, *tests):
     return compare(test, a)
 
 
-def contracts(x, seqs):
+def contracts(seqs):
     alphabet = seqs.alphabet
     length = seqs.length
     sweep = sweep_offsets(max_=length - 1)
@@ -216,28 +217,35 @@ def contracts(x, seqs):
         [at_positions([i, j, k], char) for (i, j, k) in tri_positions for char in alphabet],
     ])
 
-    contracts = []
-    for _ in range(5):
+    while True:
         if random.random() < 0.8:
-            contracts.append(_random_comparison(length, *callables))
+            yield _random_comparison(length, *callables)
         else:
-            contracts.append(
-                and_(
-                    _random_comparison(length, *callables),
-                    _random_comparison(length, *callables),
-                )
+            yield and_(
+                _random_comparison(length, *callables),
+                _random_comparison(length, *callables),
             )
 
-    return {c._text: c(x) for c in contracts}
 
-
-def game_json(alphabet, length, num_samples):
+def game_json(alphabet, length, num_samples, num_contracts):
     seqs = Seqs(alphabet, length)
     words = (f"sample{i}" for i in itertools.count(1))
     samples = [seqs.make() for _ in range(num_samples)]
     qs = dict(zip(words, samples))
     ms = {k: measurements(v, seqs) for (k, v) in qs.items()}
-    cs = {k: contracts(v, seqs) for (k, v) in qs.items()}
+    # Take `num_contracts` contracts, but only take contracts that can be
+    # satisfied by at least ONE of the samples!
+    selected_contracts = take(
+        num_contracts,
+        (
+            contract for contract in contracts(seqs)
+            if any(contract(v) for v in qs.values())
+        ),
+    )
+    cs = {
+        k: {contract._text: contract(v) for contract in selected_contracts}
+        for (k, v) in qs.items()
+    }
     data = {
         "game": "0",
         "samples": list(qs.keys()),
@@ -254,8 +262,8 @@ def game_json(alphabet, length, num_samples):
 #
 
 
-def emit_json(alphabet, length, num_samples, json_file):
-    game = game_json(alphabet, length, num_samples)
+def emit_json(alphabet, length, num_samples, num_contracts, json_file):
+    game = game_json(alphabet, length, num_samples, num_contracts)
     json_file.write(json.dumps(game))
 
 
@@ -280,22 +288,24 @@ def main():
 
 @main.command('single')
 @click.option("--num-samples", default=5)
+@click.option("--num-contracts", default=5)
 @click.option("--alphabet", default="ABCD")
 @click.option("--length", type=int, default=5)
 @click.argument("output", type=click.File("w"))
-def single(alphabet, length, num_samples, output):
-    emit_json(alphabet, length, num_samples, output)
+def single(alphabet, length, num_samples, num_contracts, output):
+    emit_json(alphabet, length, num_samples, num_contracts, output)
 
 
 @main.command('upload')
 @click.option("--num-samples", default=5)
+@click.option("--num-contracts", default=5)
 @click.option("--alphabet", default="ABCD")
 @click.option("--length", type=int, default=5)
 @click.option("--series-name", default=None)
 @click.option("--num-games", default=5)
-def upload(alphabet, length, num_samples, series_name, num_games):
+def upload(alphabet, length, num_samples, num_contracts, series_name, num_games):
     games = [
-        game_json(alphabet, length, num_samples)
+        game_json(alphabet, length, num_samples, num_contracts)
         for _ in range(num_games)
     ]
     stage_dirs = [prepare_stage(game) for game in games]
