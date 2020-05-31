@@ -19,6 +19,7 @@ import diceware
 from cytoolz import curry
 from cytoolz import dissoc
 from cytoolz import juxt
+from cytoolz import sliding_window
 
 #
 # Constants
@@ -94,28 +95,11 @@ def random_words(num):
 #
 
 
-def and_(*funcs):
-    def true(*args, **kwargs):
-        return True
-
-    def _(seq):
-        return reduce(lambda acc, f: acc and f(seq), funcs, true,)
-
-    return _
-
-
-def or_(*funcs):
-    def _(seq):
-        return reduce(lambda f1, f2: f1(seq) or f2(seq), funcs)
-
-    return _
-
-
-def not_(func):
-    def _(seq):
-        return not func(seq)
-
-    return _
+def and_(f1, f2):
+    def _and_(seq):
+        return f1(seq) and f2(seq)
+    _and_._text = f"{f1._text} and {f2._text}"
+    return _and_
 
 
 #
@@ -123,117 +107,38 @@ def not_(func):
 #
 
 
-@curry
-def count_of(sub, seq):
-    return len(re.findall(sub.upper(), seq.upper()))
+def count_of(sub):
+    def _count_of(seq):
+        return len(re.findall(sub.upper(), seq.upper()))
+    _count_of._text = f"{sub.upper()}"
+    return _count_of
+
+
+def count_of_exact(sub):
+    def _count_of_exact(seq):
+        subs = ["".join(entry) for entry in sliding_window(len(sub), seq)]
+        return subs.count(sub)
+    _count_of_exact._text = f"{sub.upper()}"
+    return _count_of_exact
 
 
 @curry
-def has_repeat_at_least(length, seq):
-    return count_of(repeat_of(length), seq)
+def at_positions(positions, char):
+    def _at_positions(seq):
+        return len([seq[i] for i in positions if seq[i].upper() == char.upper()])
 
-
-def distinct_repeat_groups(seq):
-    return list(set(re.findall(repeat_of(2), seq)))
-
-
-def most_frequent_char(seq):
-    (char, _) = most_frequent_no_ties(seq)
-    return char
-
-
-def repeat_of(n):
-    return "(.)" + r"\1" * (n - 1)
-
-
-def most_frequent_no_ties(seq):
-
-    counts = Counter(seq)
-
-    most = None
-    most_count = 0
-    for (k, count) in counts.items():
-
-        # Drop duplicate counts
-        if count == most_count:
-            most = None
-            most_count = 0
-
-        elif count > most_count:
-            most = k
-            most_count = count
-
-    return (most, most_count)
-
-
-#
-# Measurement predicates
-#
-
-
-def more_than_two_repeaters(seq):
-    return len(distinct_repeat_groups(seq.upper())) >= 2
-
-
-@curry
-def predominantly(chars, seq):
-    (found_char, _) = most_frequent_no_ties(seq.upper())
-    return found_char.upper() in chars
-
-
-@curry
-def at_least(n, sub, seq):
-    return count_of(sub, seq) >= n
-
-
-@curry
-def fewer_than(n, sub, seq):
-    return count_of(sub, seq) < n
-
-
-@curry
-def starts_with(sub, seq):
-    return seq.upper().startswith(sub.upper())
-
-
-@curry
-def ends_with(sub, seq):
-    return seq.upper().endswith(sub.upper())
-
-
-@curry
-def has_absence_of(sub, seq):
-    return count_of(sub, seq) == 0
-
-
-@curry
-def at_positions(positions, char, seq):
-    return len([seq[i] for i in positions if seq[i].upper() == char.upper()])
+    # FIXME: length hardcoded here because FUCK passing it through would suck
+    length = 5
+    pos_description = ["."] * length
+    for pos in positions:
+        pos_description[pos] = char
+    _at_positions._text = "".join(pos_description)
+    return _at_positions
 
 
 #
 # Interactive stuff
 #
-
-
-def price_chart(seqs):
-    print(
-        f"""
-A1 ... {seqs.value(at_positions([0], "A"))}
-A2 ... {seqs.value(at_positions([0, 1], "A"))}
-A3 ... {seqs.value(at_positions([0, 1, 2], "A"))}
-AB ... {seqs.value(count_of("AB"))}
-AA ... {seqs.value(count_of("AA"))}
-A  ... {seqs.value(count_of("A"))}
-"""
-    )
-
-
-def posc(length, positions, char):
-    res = ["."] * length
-    for pos in positions:
-        res[pos] = char
-    return "".join(res)
 
 
 @curry
@@ -258,30 +163,88 @@ def measurements(x, seqs):
         [sweep([0, 1, 2]), sweep([0, 2, 4]), sweep([0, 3, 4]), [[0, length // 2, -1]],]
     )
 
-    res = {}
+    callables = flatten_list([
+        [count_of(char) for char in alphabet],
+        [count_of_exact(f"{char1}{char2}") for char1 in alphabet for char2 in alphabet],
+        [at_positions([i, j, k], char) for (i, j, k) in tri_positions for char in alphabet],
+    ])
 
-    for char in alphabet:
-        res[f"{char}"] = count_of(char, x)
-        for char2 in alphabet:
-            res[f"{char}{char2}"] = count_of(f"{char}{char2}", x)
-        for (i, j, k) in tri_positions:
-            res[posc(length, [i, j, k], char)] = at_positions([i, j, k], char, x)
+    return {c._text: c(x) for c in callables}
 
-    return res
+
+def _random_comparison(max_, *tests):
+    a = random.choice(range(max_))
+
+    @curry
+    def greater_than(f, y):
+        def _greater_than(seq):
+            return f(seq) >= y
+        _greater_than._text = f"{f._text}≥{y}"
+        return _greater_than
+
+    @curry
+    def less_than(f, y):
+        def _less_than(seq):
+            return f(seq) <= y
+        _less_than._text = f"{f._text}≤{y}"
+        return _less_than
+
+    @curry
+    def equal_to(f, y):
+        def _equal_to(seq):
+            return f(seq) == y
+        _equal_to._text = f"{f._text}={y}"
+        return _equal_to
+
+    test = random.choice(tests)
+    compare = random.choice([less_than, greater_than, equal_to])
+    return compare(test, a)
+
+
+def contracts(x, seqs):
+    alphabet = seqs.alphabet
+    length = seqs.length
+    sweep = sweep_offsets(max_=length - 1)
+
+    tri_positions = flatten_list(
+        [sweep([0, 1, 2]), sweep([0, 2, 4]), sweep([0, 3, 4]), [[0, length // 2, -1]],]
+    )
+
+    callables = flatten_list([
+        [count_of(char) for char in alphabet],
+        [count_of_exact(f"{char1}{char2}") for char1 in alphabet for char2 in alphabet],
+        [at_positions([i, j, k], char) for (i, j, k) in tri_positions for char in alphabet],
+    ])
+
+    contracts = []
+    for _ in range(5):
+        if random.random() < 0.8:
+            contracts.append(_random_comparison(length, *callables))
+        else:
+            contracts.append(
+                and_(
+                    _random_comparison(length, *callables),
+                    _random_comparison(length, *callables),
+                )
+            )
+
+    return {c._text: c(x) for c in contracts}
 
 
 def game_json(alphabet, length, num_samples):
     seqs = Seqs(alphabet, length)
-    words = (random_word() for _ in itertools.count())
+    words = (f"sample{i}" for i in itertools.count(1))
     samples = [seqs.make() for _ in range(num_samples)]
     qs = dict(zip(words, samples))
-    ms = {k: dissoc(dict(measurements(v, seqs)), "_stats_") for (k, v) in qs.items()}
+    ms = {k: measurements(v, seqs) for (k, v) in qs.items()}
+    cs = {k: contracts(v, seqs) for (k, v) in qs.items()}
     data = {
         "game": "0",
         "samples": list(qs.keys()),
         "tests": list(list(ms.values())[0].keys()),
         "answers": qs,
         "measures": ms,
+        "contracts": cs,
     }
     return data
 

@@ -1,6 +1,7 @@
 module Main exposing (..)
 
 import Browser exposing (element)
+import Color exposing (Color)
 import Debug exposing (log)
 import Dict exposing (Dict)
 import Html exposing (..)
@@ -18,30 +19,6 @@ main =
     element { init = init, view = view, update = update, subscriptions = subscriptions }
 
 
-quickSamples num =
-    let
-        wrap_ txt =
-            { text = txt, id = txt }
-    in
-    List.map wrap_ (List.map (\x -> "S" ++ String.fromInt x) (List.range 1 num))
-
-
-quickContracts num =
-    let
-        wrap_ txt =
-            { text = txt, id = txt }
-    in
-    List.map wrap_ (List.map (\x -> "C" ++ String.fromInt x) (List.range 1 num))
-
-
-quickTests num =
-    let
-        wrap_ txt =
-            { text = txt, id = txt }
-    in
-    List.map wrap_ (List.map (\x -> "T" ++ String.fromInt x) (List.range 1 num))
-
-
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( initialModel, fetchConstantGame )
@@ -57,15 +34,15 @@ subscriptions _ =
 
 
 type alias Contract =
-    { text : String, id : String }
+    String
 
 
 type alias Test =
-    { text : String, id : String }
+    String
 
 
 type alias Sample =
-    { text : String, id : String }
+    String
 
 
 type alias TestResult =
@@ -73,20 +50,20 @@ type alias TestResult =
 
 
 type alias GameStateReply =
-    { tests : List Test
-    , samples : List Sample
-    , measures : Dict String (Dict String Int)
+    { measures : Dict String (Dict String Int)
+    , contracts : Dict String (Dict String Bool)
     , answers : Dict String String
     }
 
 
 type alias Model =
-    { contracts : List Contract
-    , tests : List Test
+    { tests : List Test
     , samples : List Sample
+    , sampleColoring : Dict Sample Color
     , results : List ( Sample, Test, TestResult )
     , measures : Dict String (Dict String Int)
     , answers : Dict String String
+    , contracts : Dict String (Dict String Bool)
     , answersRevealed : Bool
     , money : Int
     , selectedSample : Maybe Sample
@@ -95,12 +72,13 @@ type alias Model =
 
 
 initialModel =
-    { contracts = []
-    , tests = []
+    { tests = []
     , samples = []
+    , sampleColoring = Dict.empty
     , results = []
-    , measures = Dict.fromList []
-    , answers = Dict.fromList []
+    , measures = Dict.empty
+    , answers = Dict.empty
+    , contracts = Dict.empty
     , answersRevealed = False
     , money = 0
     , selectedSample = Nothing
@@ -112,6 +90,7 @@ type Msg
     = Noop
     | SampleClicked Sample
     | TestClicked Test
+    | ContractClicked String
     | GotGameState (Result Http.Error GameStateReply)
     | ShowAnswers
     | HideAnswers
@@ -150,8 +129,8 @@ update msg model =
                         newModel =
                             let
                                 result =
-                                    Dict.get sample.id model.measures
-                                        |> Maybe.andThen (Dict.get test.id)
+                                    Dict.get sample model.measures
+                                        |> Maybe.andThen (Dict.get test)
                                         |> Maybe.withDefault 0
                                         |> String.fromInt
                             in
@@ -159,12 +138,67 @@ update msg model =
                     in
                     ( newModel, Cmd.none )
 
+        ContractClicked contractString ->
+            case model.selectedSample of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just sample ->
+                    let
+                        newModel =
+                            let
+                                result =
+                                    Dict.get sample model.contracts
+                                        |> Maybe.andThen (Dict.get contractString)
+                                        |> Maybe.withDefault False
+
+                                _ =
+                                    log "result " result
+                            in
+                            { model | selectedSample = Nothing }
+                    in
+                    ( newModel, Cmd.none )
+
         GotGameState s ->
             case s of
-                Ok { tests, samples, measures, answers } ->
-                    ( { model | tests = tests, samples = samples, measures = measures, answers = answers }, Cmd.none )
+                Ok { measures, answers, contracts } ->
+                    let
+                        okColors =
+                            [ Color.red, Color.brown, Color.green, Color.blue, Color.purple, Color.orange ]
+
+                        samples : List Sample
+                        samples =
+                            Dict.keys measures
+
+                        tests : List Test
+                        tests =
+                            Dict.values measures
+                                |> List.head
+                                |> Maybe.withDefault Dict.empty
+                                |> Dict.keys
+
+                        sampleColoring : Dict Sample Color
+                        sampleColoring =
+                            Dict.fromList <|
+                                List.map2
+                                    Tuple.pair
+                                    samples
+                                    okColors
+
+                        newModel =
+                            { model
+                                | tests = tests
+                                , samples = samples
+                                , measures = measures
+                                , answers = answers
+                                , contracts = contracts
+                                , sampleColoring = sampleColoring
+                            }
+                    in
+                    ( newModel, Cmd.none )
 
                 Err e ->
+                    -- Do nothing
                     ( model, Cmd.none )
 
         ShowAnswers ->
@@ -204,10 +238,11 @@ view model =
                 ShowAnswers
     in
     div [] <|
-        [ viewSamples model.samples model.selectedSample
+        [ viewSamples model.samples model.selectedSample model.sampleColoring
         , viewTests model.tests
-        , viewResults model.results model.resultsExpanded
-        , a [ Attrs.class "outer", Attrs.href "#", onClick showm ] [ text <| "(" ++ showp ++ " answers)" ]
+        , viewResults model.results model.resultsExpanded model.sampleColoring
+        , viewContracts model.contracts
+        , a [ Attrs.class "outer", onClick showm ] [ text <| "(" ++ showp ++ " answers)" ]
         ]
             ++ (if model.answersRevealed == True then
                     [ viewAnswers model.answers ]
@@ -222,24 +257,28 @@ sectionAttrs =
     [ Attrs.class "section" ]
 
 
-viewSamples samples selectedSample =
+viewSamples samples selectedSample sampleColoring =
+    let
+        getColor sample =
+            Dict.get sample sampleColoring |> Maybe.withDefault Color.black
+    in
     div sectionAttrs
         [ h1 [] [ text "Samples" ]
         , viewButtons
-            { caption = \x -> x.text
+            { caption = \x -> x
             , signal = \x -> SampleClicked x
             , style =
                 \x ->
                     case selectedSample of
                         Nothing ->
-                            defaultButtonStyle
+                            defaultButtonStyle ++ [ Attrs.style "background" (Color.toCssString <| getColor x) ]
 
                         Just selectedSample_ ->
-                            if x.id == selectedSample_.id then
-                                selectedButtonStyle
+                            if x == selectedSample_ then
+                                selectedButtonStyle ++ [ Attrs.style "background" (Color.toCssString <| getColor x) ]
 
                             else
-                                defaultButtonStyle
+                                defaultButtonStyle ++ [ Attrs.style "background" (Color.toCssString <| getColor x) ]
             }
             samples
         ]
@@ -249,7 +288,7 @@ viewTests tests =
     div sectionAttrs
         [ h1 [] [ text "Tests" ]
         , viewButtons
-            { caption = \x -> x.text
+            { caption = \x -> x
             , signal = \x -> TestClicked x
             , style = \_ -> defaultButtonStyle
             }
@@ -257,10 +296,33 @@ viewTests tests =
         ]
 
 
-viewResults results expanded =
+viewContracts contracts =
     let
-        viewResult ( sample, test, r ) =
-            li [ Attrs.class "outer" ] [ text (sample.text ++ " " ++ test.text ++ " = " ++ r) ]
+        contractNamesAll =
+            List.map Dict.keys (Dict.values contracts)
+
+        contractNames =
+            List.head contractNamesAll |> Maybe.withDefault []
+    in
+    div sectionAttrs
+        [ h1 [] [ text "Contracts" ]
+        , viewButtons
+            { caption = \x -> x
+            , signal = \x -> ContractClicked x
+            , style = \_ -> defaultButtonStyle
+            }
+            contractNames
+        ]
+
+
+viewResults results expanded sampleColoring =
+    let
+        getColor sample =
+            Dict.get sample sampleColoring |> Maybe.withDefault Color.black
+
+        viewResult : ( Sample, Test, TestResult ) -> Html Msg
+        viewResult ( sample, test, result ) =
+            li [ Attrs.class "outer", Attrs.style "color" (Color.toCssString <| getColor sample) ] [ text (sample ++ " " ++ test ++ " = " ++ result) ]
 
         exStyle =
             if expanded == True then
@@ -305,15 +367,19 @@ viewInstructions =
             ]
         , div []
             [ h2 [] [ text "Samples" ]
-            , p [] [ text "The samples are each secret 5-letter strings made of A, B, C, and D.  The samples are named randomly; the name has no relation to their underlying composition!" ]
+            , p [] [ text "The samples are each secret 5-letter strings made of A, B, C, and D." ]
             ]
         , div []
             [ h2 [] [ text "Tests" ]
             , ul []
-                [ li [] [ text "A - Number of times A appears at any position in the sample" ]
-                , li [] [ text "AA - Number of times A appears in a set of TWO OR MORE anywhere in the sample" ]
-                , li [] [ text "AB - Number of times AB appears in that order anywhere in the sample" ]
-                , li [] [ text ".AAA. - Number of A's present in the central 3 positions of the string" ]
+                [ li [] [ b [] [ text "A - " ], text "Number of times A appears at any position in the sample.  (E.G. C = 2 means there are 2 C's in the sample)" ]
+                , li [] [ b [] [ text "AA - " ], text "Number of times A appears twice in a row.  (E.G. AA = 1 for 'AABBB', AA = 2 for 'AAABB')" ]
+                , li [] [ b [] [ text "AB - " ], text "Number of times AB appears in that order anywhere in the sample  (E.G. CD is in the samples 'ACDCB' and 'CDDDD', but not 'DCBBB' or 'CCCBD')" ]
+                , li [] [ b [] [ text "AAA.. - " ], text "Number of A's present in the first 3 positions of the string" ]
+                , li [] [ b [] [ text ".AAA. - " ], text "Number of A's present in the central 3 positions of the string" ]
+                , li [] [ b [] [ text "..AAA - " ], text "Number of A's present in the final 3 positions of the string" ]
+                , li [] [ b [] [ text "A.A.A - " ], text "Number of A's present in the 3 string positions indicated" ]
+                , li [] [ text "(Other tests with periods are similar: periods represent 'anything', and the letters mark places where the letter is being counted)" ]
                 ]
             ]
         , div []
@@ -362,24 +428,8 @@ fetchConstantGame =
 
 constantGameDecoder : D.Decoder GameStateReply
 constantGameDecoder =
-    let
-        nameToTest : D.Decoder Test
-        nameToTest =
-            D.map2
-                (\x -> \y -> { text = x, id = y })
-                D.string
-                D.string
-
-        nameToSample : D.Decoder Sample
-        nameToSample =
-            D.map2
-                (\x -> \y -> { text = x, id = y })
-                D.string
-                D.string
-    in
-    D.map4
-        (\x -> \y -> \z -> \w -> { tests = x, samples = y, measures = z, answers = w })
-        (D.at [ "tests" ] (D.list nameToTest))
-        (D.at [ "samples" ] (D.list nameToSample))
+    D.map3
+        (\x y z -> { measures = x, answers = y, contracts = z })
         (D.at [ "measures" ] (D.dict (D.dict D.int)))
         (D.at [ "answers" ] (D.dict D.string))
+        (D.at [ "contracts" ] (D.dict (D.dict D.bool)))

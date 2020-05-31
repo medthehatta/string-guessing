@@ -25,6 +25,11 @@
     font-size: 24px;
     -webkit-touch-callout: none;
     user-select: none;
+    color: black;
+}
+
+.button:hover {
+    color: black;
 }
 
 .bordered {
