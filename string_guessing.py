@@ -39,13 +39,121 @@ SEQUENCE_LENGTH = 5
 #
 
 
-class Seqs:
-    def __init__(self, alphabet, length):
+def trace(*xs):
+    for x in xs:
+        print(x)
+    return xs
+
+
+class GameDefinition:
+
+    def __init__(self, alphabet, length, num_samples, num_contracts):
         self.alphabet = alphabet
         self.length = length
+        self.num_samples = num_samples
+        self.num_contracts = num_contracts
 
-    def make(self):
-        return "".join(random.choice(self.alphabet) for _ in range(self.length)).upper()
+    def make_sample(self):
+        return "".join(
+            random.choice(self.alphabet)
+            for _ in range(self.length)
+        ).upper()
+
+    def sample_generator(self):
+        while True:
+            yield self.make_sample()
+
+    def sample_set_generator(self):
+        return partition(self.num_samples, self.sample_generator())
+
+    def make_contract(self):
+        callables = self.available_callables()
+
+        if random.random() < 0.8:
+            cmp_against = random.choice(range(self.length))
+            return random_comparison(*callables)(cmp_against)
+
+        else:
+            cmp_against1 = random.choice(range(self.length))
+            cmp_against2 = random.choice(range(self.length))
+            return and_(
+                random_comparison(*callables)(cmp_against1),
+                random_comparison(*callables)(cmp_against2),
+            )
+
+    def contract_generator(self):
+        while True:
+            yield self.make_contract()
+
+    def contract_set_generator(self):
+        return partition(self.num_contracts, self.contract_generator())
+
+    def paired_contracts_samples(self):
+
+        def _adjust(cs):
+            (contracts, samples) = cs
+            contracts_fixed = fix_contract_set(
+                contracts,
+                samples,
+                self.make_contract,
+            )
+            samples_fixed = fix_sample_set(
+                samples,
+                contracts_fixed,
+                self.make_sample,
+            )
+            return (contracts_fixed, samples_fixed)
+
+        initial_contract_set = next(self.contract_set_generator())
+        initial_sample_set = next(self.sample_set_generator())
+
+        return iterate_until_stable(
+            _adjust,
+            (initial_contract_set, initial_sample_set),
+        )
+
+    def available_callables(self):
+        alphabet = self.alphabet
+        length = self.length
+        sweep = sweep_offsets(max_=length - 1)
+
+        tri_positions = flatten_list(
+            [
+                sweep([0, 1, 2]),
+                sweep([0, 2, 4]),
+                sweep([0, 3, 4]),
+                [[0, length // 2, -1]],
+            ]
+        )
+
+        return flatten_list([
+            [count_of(char) for char in alphabet],
+            [
+                count_of_exact(f"{char1}{char2}")
+                for char1 in alphabet
+                for char2 in alphabet
+            ],
+            [
+                at_positions(length, [i, j, k], char)
+                for (i, j, k) in tri_positions
+                for char in alphabet
+            ],
+        ])
+
+    def random_measurements(self, available_pct=100):
+        callables = self.available_callables()
+        selected = []
+        for callable_ in callables:
+            if 100*random.random() < available_pct:
+                selected.append(callable_)
+        return selected
+
+
+class GameAnalyzer:
+
+    def __init__(self, alphabet, length, num_samples, num_contracts):
+        self.alphabet = alphabet
+        self.length = length
 
     def hist(self, *funcs):
         alphabet = self.alphabet
@@ -94,6 +202,98 @@ def random_words(num):
     return "-".join(random_word() for _ in range(num))
 
 
+def replace_unacceptable(unacceptable, lst, element_maker):
+    while any(unacceptable(element) for element in lst):
+        lst = [
+            element_maker(element) if unacceptable(element) else element
+            for element in lst
+        ]
+    return lst
+
+
+def fix_sample_set(sample_set, contract_set, sample_maker):
+
+    def unacceptable(sample):
+        return any([
+            all(c(sample) is True for c in contract_set),
+            not any(c(sample) is True for c in contract_set),
+        ])
+
+    return replace_unacceptable(
+        unacceptable,
+        sample_set,
+        lambda x: sample_maker(),
+    )
+
+
+def fix_contract_set(contract_set, sample_set, contract_maker):
+
+    def unacceptable(contract):
+        return any([
+            all(contract(s) is True for s in sample_set),
+            not any(contract(s) is True for s in sample_set),
+        ])
+
+    return replace_unacceptable(
+        unacceptable,
+        contract_set,
+        lambda x: contract_maker(),
+    )
+
+
+def fix_contracts_samples(contract_set, sample_set, contract_maker, sample_maker):
+
+    def _adjust(cs):
+        (contracts, samples) = cs
+        contracts_fixed = fix_contract_set(contracts, samples, contract_maker)
+        samples_fixed = fix_sample_set(samples, contracts_fixed, sample_maker)
+        return (contracts_fixed, samples_fixed)
+
+    return iterate_until_stable(_adjust, (contract_set, sample_set))
+
+
+def random_comparison(*tests):
+
+    @curry
+    def greater_than(f, y):
+        def _greater_than(seq):
+            return f(seq) >= y
+        _greater_than._text = f"{f._text}≥{y}"
+        return _greater_than
+
+    @curry
+    def less_than(f, y):
+        def _less_than(seq):
+            return f(seq) <= y
+        _less_than._text = f"{f._text}≤{y}"
+        return _less_than
+
+    @curry
+    def equal_to(f, y):
+        def _equal_to(seq):
+            return f(seq) == y
+        _equal_to._text = f"{f._text}={y}"
+        return _equal_to
+
+    test = random.choice(tests)
+    compare = random.choice([less_than, greater_than, equal_to])
+    return compare(test)
+
+
+def iterate_until_stable(func, initial):
+    class _Uninitialized:
+        pass
+
+    oldvalue = _Uninitialized
+    value = initial
+
+    while value != oldvalue:
+        oldvalue = value
+        value = func(value)
+
+    return value
+
+
 #
 # Predicate helpers
 #
@@ -127,22 +327,15 @@ def count_of_exact(sub):
 
 
 @curry
-def at_positions(positions, char):
+def at_positions(length, positions, char):
     def _at_positions(seq):
         return len([seq[i] for i in positions if seq[i].upper() == char.upper()])
 
-    # FIXME: length hardcoded here because FUCK passing it through would suck
-    length = 5
     pos_description = ["."] * length
     for pos in positions:
         pos_description[pos] = char
     _at_positions._text = "".join(pos_description)
     return _at_positions
-
-
-#
-# Interactive stuff
-#
 
 
 @curry
@@ -158,217 +351,46 @@ def sweep_offsets(kernel, max_):
     return list(itertools.takewhile(lambda x: x[-1] <= max_, gen))
 
 
-def measurements(x, seqs):
-    alphabet = seqs.alphabet
-    length = seqs.length
-    sweep = sweep_offsets(max_=length - 1)
-
-    tri_positions = flatten_list(
-        [sweep([0, 1, 2]), sweep([0, 2, 4]), sweep([0, 3, 4]), [[0, length // 2, -1]],]
-    )
-
-    callables = flatten_list([
-        [count_of(char) for char in alphabet],
-        [count_of_exact(f"{char1}{char2}") for char1 in alphabet for char2 in alphabet],
-        [at_positions([i, j, k], char) for (i, j, k) in tri_positions for char in alphabet],
-    ])
-
-    return {c._text: c(x) for c in callables}
-
-
-def _random_comparison(max_, *tests):
-    a = random.choice(range(max_))
-
-    @curry
-    def greater_than(f, y):
-        def _greater_than(seq):
-            return f(seq) >= y
-        _greater_than._text = f"{f._text}≥{y}"
-        return _greater_than
-
-    @curry
-    def less_than(f, y):
-        def _less_than(seq):
-            return f(seq) <= y
-        _less_than._text = f"{f._text}≤{y}"
-        return _less_than
-
-    @curry
-    def equal_to(f, y):
-        def _equal_to(seq):
-            return f(seq) == y
-        _equal_to._text = f"{f._text}={y}"
-        return _equal_to
-
-    test = random.choice(tests)
-    compare = random.choice([less_than, greater_than, equal_to])
-    return compare(test, a)
-
-
-def random_contracts(seqs):
-    alphabet = seqs.alphabet
-    length = seqs.length
-    sweep = sweep_offsets(max_=length - 1)
-
-    tri_positions = flatten_list(
-        [sweep([0, 1, 2]), sweep([0, 2, 4]), sweep([0, 3, 4]), [[0, length // 2, -1]],]
-    )
-
-    callables = flatten_list([
-        [count_of(char) for char in alphabet],
-        [count_of_exact(f"{char1}{char2}") for char1 in alphabet for char2 in alphabet],
-        [at_positions([i, j, k], char) for (i, j, k) in tri_positions for char in alphabet],
-    ])
-
-    while True:
-        if random.random() < 0.8:
-            yield _random_comparison(length, *callables)
-        else:
-            yield and_(
-                _random_comparison(length, *callables),
-                _random_comparison(length, *callables),
-            )
-
-
-def average(lst):
-    lst = list(lst)
-    return sum(lst) / len(lst)
-
-
-def std(lst):
-    avg = average(lst)
-    var = sum((x - avg)**2 for x in lst)
-    return sqrt(var/len(lst))
-
-
-def truth_frequencies(contracts, values):
-    interactions = [
-        (val, contract, contract(val))
-        for val in values for contract in contracts
-    ]
-
-    truth_freq_by_val = \
-        Counter(val for (val, contract, p) in interactions if p)
-
-    truth_freq_by_contract = \
-        Counter(contract for (val, contract, p) in interactions if p)
-
-    return (truth_freq_by_val, truth_freq_by_contract)
-
-
-def evaluate_candidate_contracts(contracts, values):
-    (truth_freq_by_val, truth_freq_by_contract) = \
-        truth_frequencies(contracts, values)
-
-    no_universal_values = \
-        not any(v == len(contracts) for v in truth_freq_by_val.values())
-
-    all_vals_can_score = all(
-        val in truth_freq_by_val
-        for val in values
-    )
-
-    all_contracts_can_score = all(
-        contract in truth_freq_by_contract
-        for contract in contracts
-    )
-
-    std_vals_small = (
-        len(truth_freq_by_val.values()) > 0 and
-        std(truth_freq_by_val.values()) < len(contracts) / 3
-    )
-
-    std_contracts_small = (
-        len(truth_freq_by_contract.values()) > 0 and
-        std(truth_freq_by_contract.values()) < len(values) / 3
-    )
-
-    return all([
-        all_vals_can_score,
-        all_contracts_can_score,
-        no_universal_values,
-        std_vals_small,
-        std_contracts_small,
-    ])
-
-
-def select_reasonable_contracts(seqs, qs, num_contracts):
-    num_samples = len(qs)
-
-    candidate_contracts = partition(num_contracts, random_contracts(seqs))
-    # We accept only sets of contracts which are actually interesting to play.
-    #
-    # `evaluate_candidate_contracts` checks all the conditions except for one
-    # which fails frequently and which we need to modify gently instead of
-    # rejection sampling: we need to attempt to replace contracts which can be
-    # fulfulled by ANY of the samples.
-    #
-    for contracts in candidate_contracts:
-        (truth_by_val, truth_by_contract) = \
-            truth_frequencies(contracts, qs.values())
-        if not evaluate_candidate_contracts(contracts, qs.values()):
-            continue
-        contracts_matching_all = [
-            contract for contract in contracts
-            if truth_by_contract[contract] == num_samples
-        ]
-        if not contracts_matching_all:
-            return contracts
-        adjusted = []
-        while contracts_matching_all:
-            old_adjusted = adjusted
-            adjusted = [
-                (
-                    next(random_contracts(seqs))
-                    if contract in contracts_matching_all else
-                    contract
-                )
-                for contract in contracts
-            ]
-            # If we accidentally invalidated `evaluate_candidate_contracts`
-            # with our adjustment, but the adjustment removed any contracts
-            # matching all, we're stuck because this loop is only trying to
-            # adjust for contracts matching all.  We need to break out and get
-            # a fresh set of candidates.
-            if old_adjusted == adjusted:
-                break
-            (truth_by_val, truth_by_contract) = \
-                truth_frequencies(adjusted, qs.values())
-            if not evaluate_candidate_contracts(contracts, qs.values()):
-                continue
-            contracts_matching_all = [
-                contract for contract in adjusted
-                if truth_by_contract[contract] == num_samples
-            ]
-        # If we did not break, we made it out of the loop successfully.  Return
-        # the working adjusted value
-        else:
-            return adjusted
-        # If we got out of the loop by breaking, it means we got stuck.  Try
-        # again with a fresh set of candidates
-        continue
+#
+# Interactive stuff
+#
 
 
 def game_json(alphabet, length, num_samples, num_contracts):
-    seqs = Seqs(alphabet, length)
-    words = (f"sample{i}" for i in itertools.count(1))
-    samples = [seqs.make() for _ in range(num_samples)]
-    qs = dict(zip(words, samples))
-    ms = {k: measurements(v, seqs) for (k, v) in qs.items()}
-    selected_contracts = select_reasonable_contracts(seqs, qs, num_contracts)
-    cs = {
-        k: {contract._text: contract(v) for contract in selected_contracts}
-        for (k, v) in qs.items()
+    setup = GameDefinition(alphabet, length, num_samples, num_contracts)
+    (contract_set, sample_set) = setup.paired_contracts_samples()
+    measurement_set = setup.random_measurements()
+
+    sample_names = (f"sample{i}" for i in itertools.count(1))
+    named_samples = list(zip(sample_names, sample_set))
+
+    answers = {
+        sample_name: sample
+        for (sample_name, sample) in named_samples
     }
-    data = {
+
+    measurement_values = {
+        sample_name: {
+            measurement._text: measurement(sample)
+            for measurement in measurement_set
+        }
+        for (sample_name, sample) in named_samples
+    }
+
+    contract_values = {
+        sample_name: {
+            contract._text: contract(sample)
+            for contract in contract_set
+        }
+        for (sample_name, sample) in named_samples
+    }
+
+    return {
         "game": "0",
-        "samples": list(qs.keys()),
-        "tests": list(list(ms.values())[0].keys()),
-        "answers": qs,
-        "measures": ms,
-        "contracts": cs,
+        "answers": answers,
+        "measures": measurement_values,
+        "contracts": contract_values,
     }
-    return data
 
 
 #
