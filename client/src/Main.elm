@@ -97,7 +97,7 @@ initialModel =
     , results = []
     , setup = emptyInterrogator
     , answersRevealed = False
-    , money = 100
+    , money = 10
     , selectedSample = Nothing
     , resultsExpanded = True
     }
@@ -144,12 +144,15 @@ update msg model =
                         result =
                             model.setup.measure sample test
 
+                        updatedMoney =
+                            model.money - 1
+
                         newModel =
                             if List.length (List.filter (\x -> x == result) model.results) > 0 then
                                 model
 
                             else
-                                { model | results = model.results ++ [ result ] }
+                                { model | results = model.results ++ [ result ], money = updatedMoney }
                     in
                     ( newModel, Cmd.none )
 
@@ -163,12 +166,27 @@ update msg model =
                         result =
                             model.setup.tryContract sample contract
 
+                        updatedMoney =
+                            case result of
+                                TestResult _ _ _ ->
+                                    model.money
+
+                                ContractResult _ _ success ->
+                                    if success == True then
+                                        model.money + 5
+
+                                    else
+                                        model.money - 5
+
                         newModel =
                             if List.length (List.filter (\x -> x == result) model.results) > 0 then
                                 model
 
                             else
-                                { model | results = model.results ++ [ result ] }
+                                { model
+                                    | results = model.results ++ [ result ]
+                                    , money = updatedMoney
+                                }
                     in
                     ( newModel, Cmd.none )
 
@@ -282,7 +300,7 @@ view model =
         [ viewSamples model.samples model.selectedSample model.sampleColoring
         , viewTests model.tests
         , viewContracts model.contracts model.results model.sampleColoring
-        , viewResults model.results model.resultsExpanded model.sampleColoring
+        , viewResults model.results model.resultsExpanded model.sampleColoring model.money
         , a [ Attrs.class "outer", onClick ToggleAnswers ] [ text showp ]
         ]
             ++ (if model.answersRevealed == True then
@@ -406,7 +424,7 @@ viewContracts contracts results sampleColoring =
         ]
 
 
-viewResults results expanded sampleColoring =
+viewResults results expanded sampleColoring money =
     let
         getColor =
             colorForSample sampleColoring
@@ -452,7 +470,7 @@ viewResults results expanded sampleColoring =
         [ h1
             [ onClick ToggleResults ]
             [ icon exStyle.arrowClass Color.black
-            , span [] [ text "Results" ]
+            , span [] [ text ("Results" ++ " (points: " ++ String.fromInt money ++ ")") ]
             ]
         , ol [ exStyle.disp ]
             (List.map viewResult results)
@@ -478,7 +496,7 @@ viewInstructions =
         , h1 [] [ text "Instructions" ]
         , div []
             [ h2 [] [ text "Goal" ]
-            , p [] [ text "Guess the composition of the 'samples', which are 5-letter strings made of A, B, C, and D" ]
+            , p [] [ text "Get the most points you can by guessing the composition of the 'samples' and completing contracts" ]
             ]
         , div []
             [ h2 [] [ text "Samples" ]
@@ -486,6 +504,8 @@ viewInstructions =
             ]
         , div []
             [ h2 [] [ text "Tests" ]
+            , p [] [ text "Tests tell you information about samples.  Generally they tell you the number of times a certain substring appears." ]
+            , p [] [ text "Each test costs one point to run, so try to use as few tests as possible!" ]
             , ul []
                 [ li [] [ b [] [ text "A - " ], text "Number of times A appears at any position in the sample.  (E.G. C = 2 means there are 2 C's in the sample)" ]
                 , li [] [ b [] [ text "AA - " ], text "Number of times A appears twice in a row.  (E.G. AA = 1 for 'AABBB', AA = 2 for 'AAABB')" ]
@@ -498,8 +518,16 @@ viewInstructions =
                 ]
             ]
         , div []
+            [ h2 [] [ text "Contracts" ]
+            , p [] [ text "Contracts are like tests, but instead of telling you information about a sample, you put a sample on a contract if you know it satisfies the conditions of the contract." ]
+            , p [] [ text "Contracts look like tests, but they have comparisons in them.  " ]
+            , p [] [ text "For example, ", b [] [ text "AAA..≤3" ], text " is a contract that requires you submit a sample where there are 3 or fewer As at the beginning of the string" ]
+            , p [] [ text "Contracts ", em [] [ text "make" ], text " you 5 money if you satisfy the contract, but if you're incorrect they ", em [] [ text "cost" ], text " you 5 money!  So try to avoid submitting samples for contracts unless you are pretty sure!" ]
+            ]
+        , div []
             [ h2 [] [ text "How to play" ]
             , p [] [ text "Click the sample you want to test, then the test you want to perform on it.  The answer will appear in the 'Results' list" ]
+            , p [] [ text "Your points are listed at the top of the Results bar.  Right now the game allows negative points, but the goal is to get the ", em [] [ text "most" ], text " points you can!" ]
             , p [] [ text "When you're ready to check your work, click the 'reveal answers' link" ]
             , div [ Attrs.class "footer-space" ] []
             ]

@@ -73,6 +73,13 @@ section {
     margin-left: 10px;
 }
 
+.footer-right {
+    font-size: 22px;
+    float: right;
+    -webkit-touch-callout: none;
+    user-select: none;
+}
+
 .footer-ol {
     display: none;
 }
