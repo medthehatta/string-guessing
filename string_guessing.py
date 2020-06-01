@@ -448,7 +448,7 @@ def upload(alphabet, length, num_samples, num_contracts, series_name, num_games)
     series_name = series_name or random_words(2)
     for stage_dir in stage_dirs:
         game_name = random_words(2)
-        remote_prefix = "/var/www/files/string-guessing"
+        remote_prefix = "/var/www/strings"
         remote_path = f"{series_name}/{game_name}"
         os.system(f"ssh med@mancer.in mkdir -p {remote_prefix}/{remote_path}")
         os.system(
@@ -465,7 +465,7 @@ def upload(alphabet, length, num_samples, num_contracts, series_name, num_games)
         )
         os.system(f"rm -rf {stage_dir}")
         print(stage_dir)
-    click.echo(f"https://files.mancer.in/string-guessing/{series_name}")
+    click.echo(f"https://strings.mancer.in/{series_name}")
 
 
 if __name__ == "__main__":
