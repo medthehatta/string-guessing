@@ -521,7 +521,7 @@ viewInstructions =
             [ h2 [] [ text "Contracts" ]
             , p [] [ text "Contracts are like tests, but instead of telling you information about a sample, you put a sample on a contract if you know it satisfies the conditions of the contract." ]
             , p [] [ text "Contracts look like tests, but they have comparisons in them.  " ]
-            , p [] [ text "For example, ", b [] [ text "AAA..≤3" ], text " is a contract that requires you submit a sample where there are 3 or fewer As at the beginning of the string" ]
+            , p [] [ text "For example, ", b [] [ text "AAA..=3" ], text " is a contract that requires a sample where there are exactly 3 As at the beginning of the string" ]
             , p [] [ text "Contracts ", em [] [ text "make" ], text " you 5 money if you satisfy the contract, but if you're incorrect they ", em [] [ text "cost" ], text " you 5 money!  So try to avoid submitting samples for contracts unless you are pretty sure!" ]
             ]
         , div []
