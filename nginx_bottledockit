@@ -1,0 +1,16 @@
+server {
+        server_name localhost;
+
+        listen  80;
+        listen  [::]:80 default ipv6only=on;
+
+        root /var/www/bottledockit;
+
+        access_log /var/log/nginx/bottledockit.access.log;
+        error_log /var/log/nginx/bottledockit.error.log;
+
+        location / {
+                uwsgi_pass unix:/tmp/uwsgi.bottledockit.socket;
+                include uwsgi_params;
+        }
+}
