@@ -66,13 +66,24 @@ class GameDefinition:
         callables = self.contract_callables()
 
         def cmp_against_gen():
-            in_range = list(range(1, self.length))
-            # Strongly prefer nonzero values
-            return random.choice(in_range * 2 + [0])
+            # Set the aversion to zero compares and to compares between
+            # contracts.  These are totally empirical numbers, because after
+            # the contracts are generated here, the set of contracts are
+            # modified to better match the samples, and to meet other
+            # constraints.  Those constraints actually have a tendency to
+            # prefer zeros and contract compares, so we have to head it off by
+            # making those selections much less likely.
+            zero_avoidance = 10
+            var_avoidance = 15
+            # Prefer nonzero constants
+            val_rates = list(range(1, self.length))*zero_avoidance + [0]
+            constant_callables = [constant(i) for i in val_rates]
+            # Prefer comparison against constants, but have some comparisons
+            # against other contracts
+            return random.choice(constant_callables*var_avoidance + callables)
 
         if random.random() < 0.7:
-            cmp_against = cmp_against_gen()
-            return random_comparison(*callables)(cmp_against)
+            return random_comparison(*callables)(cmp_against_gen())
 
         else:
             comparisons = (
@@ -275,27 +286,27 @@ def fix_contracts_samples(contract_set, sample_set, contract_maker, sample_maker
 
 def random_comparison(*tests):
     @curry
-    def greater_than(f, y):
+    def greater_than(f, g):
         def _greater_than(seq):
-            return f(seq) >= y
+            return f(seq) >= g(seq)
 
-        _greater_than._text = f"{f._text}≥{y}"
+        _greater_than._text = f"{f._text}≥{g._text}"
         return _greater_than
 
     @curry
-    def less_than(f, y):
+    def less_than(f, g):
         def _less_than(seq):
-            return f(seq) <= y
+            return f(seq) <= g(seq)
 
-        _less_than._text = f"{f._text}≤{y}"
+        _less_than._text = f"{f._text}≤{g._text}"
         return _less_than
 
     @curry
-    def equal_to(f, y):
+    def equal_to(f, g):
         def _equal_to(seq):
-            return f(seq) == y
+            return f(seq) == g(seq)
 
-        _equal_to._text = f"{f._text}={y}"
+        _equal_to._text = f"{f._text}={g._text}"
         return _equal_to
 
     test = random.choice(tests)
@@ -375,6 +386,13 @@ def sweep_offsets(kernel, max_):
         for i in itertools.count()
     )
     return list(itertools.takewhile(lambda x: x[-1] <= max_, gen))
+
+
+def constant(value):
+    def _constant(seq):
+        return value
+    _constant._text = f"{value}"
+    return _constant
 
 
 #
