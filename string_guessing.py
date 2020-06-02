@@ -115,12 +115,7 @@ class GameDefinition:
         sweep = sweep_offsets(max_=length - 1)
 
         tri_positions = flatten_list(
-            [
-                sweep([0, 1, 2]),
-                sweep([0, 2, 4]),
-                sweep([0, 3, 4]),
-                [[0, length // 2, -1]],
-            ]
+            [sweep([0, 1, 2]), sweep([0, 3, 4]), [[0, length // 2, -1]],]
         )
 
         return flatten_list(
@@ -143,7 +138,30 @@ class GameDefinition:
         return self.available_callables()
 
     def contract_callables(self):
-        return self.available_callables()
+        alphabet = self.alphabet
+        length = self.length
+        sweep = sweep_offsets(max_=length - 1)
+
+        # We have a few extras in the contract callables
+        bi_positions = flatten_list([sweep([0, 1]), sweep([0, 2]), sweep([0, 3])])
+
+        tri_positions = flatten_list([sweep([0, 2, 3]), sweep([0, 2, 4])])
+
+        return flatten_list(
+            [
+                self.available_callables(),
+                [
+                    at_positions(length, [i, j, k], char)
+                    for (i, j, k) in tri_positions
+                    for char in alphabet
+                ],
+                [
+                    at_positions(length, [i, j], char)
+                    for (i, j) in bi_positions
+                    for char in alphabet
+                ],
+            ]
+        )
 
     def random_measurements(self, available_pct=100):
         callables = self.measurement_callables()
