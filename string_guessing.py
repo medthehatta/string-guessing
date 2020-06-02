@@ -11,9 +11,9 @@ import tempfile
 from collections import Counter
 from collections import defaultdict
 from functools import reduce
+from math import isclose
 from math import log
 from math import sqrt
-from math import isclose
 from types import SimpleNamespace
 
 import click
@@ -21,9 +21,9 @@ import diceware
 from cytoolz import curry
 from cytoolz import dissoc
 from cytoolz import juxt
+from cytoolz import partition
 from cytoolz import sliding_window
 from cytoolz import take
-from cytoolz import partition
 
 #
 # Constants
@@ -46,7 +46,6 @@ def trace(*xs):
 
 
 class GameDefinition:
-
     def __init__(self, alphabet, length, num_samples, num_contracts):
         self.alphabet = alphabet
         self.length = length
@@ -54,10 +53,7 @@ class GameDefinition:
         self.num_contracts = num_contracts
 
     def make_sample(self):
-        return "".join(
-            random.choice(self.alphabet)
-            for _ in range(self.length)
-        ).upper()
+        return "".join(random.choice(self.alphabet) for _ in range(self.length)).upper()
 
     def sample_generator(self):
         while True:
@@ -67,19 +63,30 @@ class GameDefinition:
         return partition(self.num_samples, self.sample_generator())
 
     def make_contract(self):
-        callables = self.available_callables()
+        callables = self.contract_callables()
 
-        if random.random() < 0.8:
-            cmp_against = random.choice(range(self.length))
+        def cmp_against_gen():
+            in_range = list(range(1, self.length))
+            # Strongly prefer nonzero values
+            return random.choice(in_range * 2 + [0])
+
+        if random.random() < 0.7:
+            cmp_against = cmp_against_gen()
             return random_comparison(*callables)(cmp_against)
 
         else:
-            cmp_against1 = random.choice(range(self.length))
-            cmp_against2 = random.choice(range(self.length))
-            return and_(
-                random_comparison(*callables)(cmp_against1),
-                random_comparison(*callables)(cmp_against2),
+            comparisons = (
+                random_comparison(*callables)(cmp_against_gen())
+                for _ in itertools.count()
             )
+
+            first_comparison = next(comparisons)
+            second_comparison = next(
+                c
+                for c in comparisons
+                if self.contract_similarity(c, first_comparison) < 0.7
+            )
+            return and_(first_comparison, second_comparison)
 
     def contract_generator(self):
         while True:
@@ -89,27 +96,17 @@ class GameDefinition:
         return partition(self.num_contracts, self.contract_generator())
 
     def paired_contracts_samples(self):
-
         def _adjust(cs):
             (contracts, samples) = cs
-            contracts_fixed = fix_contract_set(
-                contracts,
-                samples,
-                self.make_contract,
-            )
-            samples_fixed = fix_sample_set(
-                samples,
-                contracts_fixed,
-                self.make_sample,
-            )
+            contracts_fixed = fix_contract_set(contracts, samples, self.make_contract,)
+            samples_fixed = fix_sample_set(samples, contracts_fixed, self.make_sample,)
             return (contracts_fixed, samples_fixed)
 
         initial_contract_set = next(self.contract_set_generator())
         initial_sample_set = next(self.sample_set_generator())
 
         return iterate_until_stable(
-            _adjust,
-            (initial_contract_set, initial_sample_set),
+            _adjust, (initial_contract_set, initial_sample_set),
         )
 
     def available_callables(self):
@@ -126,31 +123,44 @@ class GameDefinition:
             ]
         )
 
-        return flatten_list([
-            [count_of(char) for char in alphabet],
+        return flatten_list(
             [
-                count_of_exact(f"{char1}{char2}")
-                for char1 in alphabet
-                for char2 in alphabet
-            ],
-            [
-                at_positions(length, [i, j, k], char)
-                for (i, j, k) in tri_positions
-                for char in alphabet
-            ],
-        ])
+                [count_of(char) for char in alphabet],
+                [
+                    count_of_exact(f"{char1}{char2}")
+                    for char1 in alphabet
+                    for char2 in alphabet
+                ],
+                [
+                    at_positions(length, [i, j, k], char)
+                    for (i, j, k) in tri_positions
+                    for char in alphabet
+                ],
+            ]
+        )
+
+    def measurement_callables(self):
+        return self.available_callables()
+
+    def contract_callables(self):
+        return self.available_callables()
 
     def random_measurements(self, available_pct=100):
-        callables = self.available_callables()
+        callables = self.measurement_callables()
         selected = []
         for callable_ in callables:
-            if 100*random.random() < available_pct:
+            if 100 * random.random() < available_pct:
                 selected.append(callable_)
         return selected
 
+    def contract_similarity(self, contract1, contract2):
+        num_samples = 1000
+        random_samples = take(num_samples, self.sample_generator())
+        counts = Counter(contract1(s) is contract2(s) for s in random_samples)
+        return counts.get(True, 0) / num_samples
+
 
 class GameAnalyzer:
-
     def __init__(self, alphabet, length, num_samples, num_contracts):
         self.alphabet = alphabet
         self.length = length
@@ -212,37 +222,30 @@ def replace_unacceptable(unacceptable, lst, element_maker):
 
 
 def fix_sample_set(sample_set, contract_set, sample_maker):
-
     def unacceptable(sample):
-        return any([
-            all(c(sample) is True for c in contract_set),
-            not any(c(sample) is True for c in contract_set),
-        ])
+        return any(
+            [
+                all(c(sample) is True for c in contract_set),
+                not any(c(sample) is True for c in contract_set),
+            ]
+        )
 
-    return replace_unacceptable(
-        unacceptable,
-        sample_set,
-        lambda x: sample_maker(),
-    )
+    return replace_unacceptable(unacceptable, sample_set, lambda x: sample_maker(),)
 
 
 def fix_contract_set(contract_set, sample_set, contract_maker):
-
     def unacceptable(contract):
-        return any([
-            all(contract(s) is True for s in sample_set),
-            not any(contract(s) is True for s in sample_set),
-        ])
+        return any(
+            [
+                all(contract(s) is True for s in sample_set),
+                not any(contract(s) is True for s in sample_set),
+            ]
+        )
 
-    return replace_unacceptable(
-        unacceptable,
-        contract_set,
-        lambda x: contract_maker(),
-    )
+    return replace_unacceptable(unacceptable, contract_set, lambda x: contract_maker(),)
 
 
 def fix_contracts_samples(contract_set, sample_set, contract_maker, sample_maker):
-
     def _adjust(cs):
         (contracts, samples) = cs
         contracts_fixed = fix_contract_set(contracts, samples, contract_maker)
@@ -253,11 +256,11 @@ def fix_contracts_samples(contract_set, sample_set, contract_maker, sample_maker
 
 
 def random_comparison(*tests):
-
     @curry
     def greater_than(f, y):
         def _greater_than(seq):
             return f(seq) >= y
+
         _greater_than._text = f"{f._text}≥{y}"
         return _greater_than
 
@@ -265,6 +268,7 @@ def random_comparison(*tests):
     def less_than(f, y):
         def _less_than(seq):
             return f(seq) <= y
+
         _less_than._text = f"{f._text}≤{y}"
         return _less_than
 
@@ -272,6 +276,7 @@ def random_comparison(*tests):
     def equal_to(f, y):
         def _equal_to(seq):
             return f(seq) == y
+
         _equal_to._text = f"{f._text}={y}"
         return _equal_to
 
@@ -302,6 +307,7 @@ def iterate_until_stable(func, initial):
 def and_(f1, f2):
     def _and_(seq):
         return f1(seq) and f2(seq)
+
     _and_._text = f"{f1._text} and {f2._text}"
     return _and_
 
@@ -314,6 +320,7 @@ def and_(f1, f2):
 def count_of(sub):
     def _count_of(seq):
         return len(re.findall(sub.upper(), seq.upper()))
+
     _count_of._text = f"{sub.upper()}"
     return _count_of
 
@@ -322,6 +329,7 @@ def count_of_exact(sub):
     def _count_of_exact(seq):
         subs = ["".join(entry) for entry in sliding_window(len(sub), seq)]
         return subs.count(sub)
+
     _count_of_exact._text = f"{sub.upper()}"
     return _count_of_exact
 
@@ -364,24 +372,17 @@ def game_json(alphabet, length, num_samples, num_contracts):
     sample_names = (f"sample{i}" for i in itertools.count(1))
     named_samples = list(zip(sample_names, sample_set))
 
-    answers = {
-        sample_name: sample
-        for (sample_name, sample) in named_samples
-    }
+    answers = {sample_name: sample for (sample_name, sample) in named_samples}
 
     measurement_values = {
         sample_name: {
-            measurement._text: measurement(sample)
-            for measurement in measurement_set
+            measurement._text: measurement(sample) for measurement in measurement_set
         }
         for (sample_name, sample) in named_samples
     }
 
     contract_values = {
-        sample_name: {
-            contract._text: contract(sample)
-            for contract in contract_set
-        }
+        sample_name: {contract._text: contract(sample) for contract in contract_set}
         for (sample_name, sample) in named_samples
     }
 
@@ -422,7 +423,7 @@ def main():
     pass
 
 
-@main.command('single')
+@main.command("single")
 @click.option("--num-samples", default=5)
 @click.option("--num-contracts", default=5)
 @click.option("--alphabet", default="ABCD")
@@ -432,7 +433,7 @@ def single(alphabet, length, num_samples, num_contracts, output):
     emit_json(alphabet, length, num_samples, num_contracts, output)
 
 
-@main.command('upload')
+@main.command("upload")
 @click.option("--num-samples", default=5)
 @click.option("--num-contracts", default=5)
 @click.option("--alphabet", default="ABCD")
@@ -453,8 +454,8 @@ def upload(alphabet, length, num_samples, num_contracts, series_name, num_games)
         os.system(f"ssh med@mancer.in mkdir -p {remote_prefix}/{remote_path}")
         os.system(
             f'bash -c "'
-            f'scp -q -r '
-            f'{stage_dir}/* '
+            f"scp -q -r "
+            f"{stage_dir}/* "
             f'\\"med@mancer.in:{remote_prefix}/{remote_path}/\\"'
             f'"'
         )
