@@ -1,6 +1,7 @@
 module Main exposing (..)
 
-import Browser exposing (element)
+import Browser exposing (application)
+import Browser.Navigation as Nav
 import Color exposing (Color)
 import Debug exposing (log)
 import Dict exposing (Dict)
@@ -9,6 +10,7 @@ import Html.Attributes as Attrs
 import Html.Events exposing (onClick, onMouseOut, onMouseOver)
 import Http
 import Json.Decode as D
+import Url exposing (Url)
 
 
 
@@ -16,22 +18,34 @@ import Json.Decode as D
 
 
 main =
-    element
+    application
         { init = init
         , view = view
         , update = update
         , subscriptions = subscriptions
+        , onUrlRequest = onUrlRequest
+        , onUrlChange = onUrlChange
         }
 
 
-init : () -> ( Model, Cmd Msg )
-init _ =
+init : () -> Url -> Nav.Key -> ( Model, Cmd Msg )
+init _ _ _ =
     ( initialModel, fetchConstantGame )
 
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.none
+
+
+onUrlRequest : Browser.UrlRequest -> Msg
+onUrlRequest _ =
+    Noop
+
+
+onUrlChange : Url -> Msg
+onUrlChange _ =
+    Noop
 
 
 
@@ -286,7 +300,7 @@ initializeModel model setup =
 -- VIEW
 
 
-view : Model -> Html Msg
+view : Model -> Browser.Document Msg
 view model =
     let
         showp =
@@ -296,20 +310,24 @@ view model =
             else
                 "(reveal answers)"
     in
-    div [] <|
-        [ viewSamples model.samples model.selectedSample model.sampleColoring
-        , viewTests model.tests
-        , viewContracts model.contracts model.results model.sampleColoring
-        , viewResults model.results model.resultsExpanded model.sampleColoring model.money
-        , a [ Attrs.class "outer", onClick ToggleAnswers ] [ text showp ]
-        ]
-            ++ (if model.answersRevealed == True then
-                    [ viewAnswers model.answers ]
+    { title = "Main"
+    , body =
+        [ div [] <|
+            [ viewSamples model.samples model.selectedSample model.sampleColoring
+            , viewTests model.tests
+            , viewContracts model.contracts model.results model.sampleColoring
+            , viewResults model.results model.resultsExpanded model.sampleColoring model.money
+            , a [ Attrs.class "outer", onClick ToggleAnswers ] [ text showp ]
+            ]
+                ++ (if model.answersRevealed == True then
+                        [ viewAnswers model.answers ]
 
-                else
-                    []
-               )
-            ++ [ viewInstructions ]
+                    else
+                        []
+                   )
+                ++ [ viewInstructions ]
+        ]
+    }
 
 
 colorForSample sampleColoring sample =
