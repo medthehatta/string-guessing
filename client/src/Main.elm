@@ -309,25 +309,24 @@ initializeModel model setup =
 view : Model -> Browser.Document Msg
 view model =
     let
-        possibleAnswers =
+        samplesOrAnswers =
             if model.answersRevealed == True then
-                [ viewAnswers model.answers model.sampleColoring ]
+                viewAnswers model.answers model.sampleColoring
 
             else
-                []
+                viewSamples model.samples model.selectedSample model.sampleColoring
     in
     { title = "Strings"
     , body =
         [ div [] <|
             [ div [ Attrs.class "top-container" ]
-                [ viewSamples model.samples model.selectedSample model.sampleColoring
+                [ samplesOrAnswers
                 , viewSubmit model
                 ]
             , viewTests model.tests
             , viewContracts model.contracts model.results model.sampleColoring
             , viewResults model.results model.resultsExpanded model.sampleColoring model.money
             ]
-                ++ possibleAnswers
                 ++ [ viewInstructions ]
         ]
     }
@@ -511,21 +510,17 @@ viewAnswers answers sampleColoring =
         getColor : Sample -> Color
         getColor =
             colorForSample sampleColoring
+
+        viewAnswer (Answer sample answer) =
+            button
+                [ bgColor (getColor sample)
+                , Attrs.class "answer-sample"
+                ]
+                [ text sample, span [] [ text answer ] ]
     in
     section []
         [ h1 [] [ text "Answers" ]
-        , table [ Attrs.class "answer-table" ]
-            (List.map
-                (\(Answer sample answer) ->
-                    tr [ bgColor (getColor sample) ]
-                        [ td []
-                            [ span [] [ text sample ]
-                            , span [] [ text answer ]
-                            ]
-                        ]
-                )
-                answers
-            )
+        , div [] (List.map viewAnswer answers)
         ]
 
 
@@ -591,9 +586,14 @@ viewButtons { caption, signal, style } buttons =
         )
 
 
+viewButtonContainer : List (Html Msg) -> List (Attribute Msg) -> Msg -> Html Msg
+viewButtonContainer content buttonStyle signal =
+    button (buttonStyle ++ [ onClick signal ]) content
+
+
 viewButton : String -> List (Attribute Msg) -> Msg -> Html Msg
 viewButton txt buttonStyle signal =
-    button (buttonStyle ++ [ onClick signal ]) [ text txt ]
+    viewButtonContainer [ text txt ] buttonStyle signal
 
 
 icon class color =
