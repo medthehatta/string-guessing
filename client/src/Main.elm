@@ -165,6 +165,9 @@ update msg model =
                             if List.length (List.filter (\x -> x == result) model.results) > 0 then
                                 model
 
+                            else if model.answersRevealed == True then
+                                model
+
                             else
                                 { model | results = model.results ++ [ result ], money = updatedMoney }
                     in
@@ -194,6 +197,9 @@ update msg model =
 
                         newModel =
                             if List.length (List.filter (\x -> x == result) model.results) > 0 then
+                                model
+
+                            else if model.answersRevealed == True then
                                 model
 
                             else
@@ -506,7 +512,7 @@ viewAnswers answers sampleColoring =
         getColor =
             colorForSample sampleColoring
     in
-    section [ Attrs.class "answer-overlay" ]
+    section []
         [ h1 [] [ text "Answers" ]
         , table [ Attrs.class "answer-table" ]
             (List.map

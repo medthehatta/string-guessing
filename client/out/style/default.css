@@ -52,31 +52,29 @@ section {
     border: none;
 }
 
-.answer-overlay {
-    position: fixed;
-    width: 100%;
-    height: 100%;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0,0,0,1);
-    z-index: 2;
-    justify-content: center;
-    align-items: center;
-    display: flex;
-    flex-direction: column;
-}
-
 .answer-table {
-    font-size: 50px;
+    font-size: 24px;
     font-family: sans;
     font-weight: bold;
 }
 
+.answer-table td {
+    align-items: center;
+    justify-content: center;
+    line-height: 50px;
+    float: left;
+    margin: 2px;
+    text-align: center;
+    text-decoration: none;
+    font-weight: bold;
+    font-family: sans;
+    font-size: 24px;
+    color: black;
+    border: none;
+}
+
 .answer-table span {
     margin: 10px;
-    padding: 5px;
 }
 
 .contract {
@@ -160,6 +158,6 @@ section {
 .scroller-outer {
     display: flex;
     flex-direction: column-reverse;
-    overflow-y: scroll;
+    overflow-y: auto;
     max-height: 450px;
 }
