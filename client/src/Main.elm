@@ -305,7 +305,7 @@ view model =
     let
         possibleAnswers =
             if model.answersRevealed == True then
-                [ viewAnswers model.answers ]
+                [ viewAnswers model.answers model.sampleColoring ]
 
             else
                 []
@@ -493,18 +493,30 @@ viewResults results expanded sampleColoring money =
             [ icon exStyle.arrowClass Color.black
             , span [] [ text ("Results" ++ " (points: " ++ String.fromInt money ++ ")") ]
             ]
-        , ol [ exStyle.disp ]
-            (List.map viewResult results)
+        , div [ Attrs.class "scroller-outer" ]
+            [ ol [ exStyle.disp, Attrs.class "scroller-inner" ]
+                (List.map viewResult results)
+            ]
         ]
 
 
-viewAnswers answers =
+viewAnswers answers sampleColoring =
+    let
+        getColor : Sample -> Color
+        getColor =
+            colorForSample sampleColoring
+    in
     section [ Attrs.class "answer-overlay" ]
         [ h1 [] [ text "Answers" ]
         , table [ Attrs.class "answer-table" ]
             (List.map
                 (\(Answer sample answer) ->
-                    tr [] [ td [] [ span [] [ text sample ], span [] [ text answer ] ] ]
+                    tr [ bgColor (getColor sample) ]
+                        [ td []
+                            [ span [] [ text sample ]
+                            , span [] [ text answer ]
+                            ]
+                        ]
                 )
                 answers
             )

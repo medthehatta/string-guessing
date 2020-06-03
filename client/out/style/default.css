@@ -70,10 +70,13 @@ section {
 
 .answer-table {
     font-size: 50px;
+    font-family: sans;
+    font-weight: bold;
 }
 
 .answer-table span {
     margin: 10px;
+    padding: 5px;
 }
 
 .contract {
@@ -115,12 +118,17 @@ section {
     left: 0;
     bottom: 0;
     width: 100%;
+}
+
+.footer h1 {
     -webkit-touch-callout: none;
     user-select: none;
 }
 
 .footer span {
     margin-left: 10px;
+    -webkit-touch-callout: none;
+    user-select: none;
 }
 
 .footer-right {
@@ -142,4 +150,16 @@ section {
 
 .submit-area {
     margin-top: 60px;
+}
+
+.scroller-inner {
+    display: flex;
+    flex-direction: column-reverse;
+}
+
+.scroller-outer {
+    display: flex;
+    flex-direction: column-reverse;
+    overflow-y: scroll;
+    max-height: 450px;
 }
