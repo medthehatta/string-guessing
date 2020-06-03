@@ -124,7 +124,7 @@ type Msg
     | SampleClicked Sample
     | TestClicked Test
     | ContractClicked Contract
-    | ToggleAnswers
+    | ShowAnswers
     | ToggleResults
 
 
@@ -213,8 +213,8 @@ update msg model =
                     -- Do nothing
                     ( model, Cmd.none )
 
-        ToggleAnswers ->
-            ( { model | answersRevealed = not model.answersRevealed }, Cmd.none )
+        ShowAnswers ->
+            ( { model | answersRevealed = True }, Cmd.none )
 
         ToggleResults ->
             ( { model | resultsExpanded = not model.resultsExpanded }, Cmd.none )
@@ -303,28 +303,25 @@ initializeModel model setup =
 view : Model -> Browser.Document Msg
 view model =
     let
-        showp =
+        possibleAnswers =
             if model.answersRevealed == True then
-                "(hide answers)"
+                [ viewAnswers model.answers ]
 
             else
-                "(reveal answers)"
+                []
     in
-    { title = "Main"
+    { title = "Strings"
     , body =
         [ div [] <|
-            [ viewSamples model.samples model.selectedSample model.sampleColoring
+            [ div [ Attrs.class "top-container" ]
+                [ viewSamples model.samples model.selectedSample model.sampleColoring
+                , viewSubmit model
+                ]
             , viewTests model.tests
             , viewContracts model.contracts model.results model.sampleColoring
             , viewResults model.results model.resultsExpanded model.sampleColoring model.money
-            , a [ Attrs.class "outer", onClick ToggleAnswers ] [ text showp ]
             ]
-                ++ (if model.answersRevealed == True then
-                        [ viewAnswers model.answers ]
-
-                    else
-                        []
-                   )
+                ++ possibleAnswers
                 ++ [ viewInstructions ]
         ]
     }
@@ -369,6 +366,12 @@ viewSamples samples selectedSample sampleColoring =
                                 defaultButtonStyle ++ [ getColor x |> bgColor ]
             }
             samples
+        ]
+
+
+viewSubmit model =
+    div [ Attrs.class "submit-area" ]
+        [ viewButton "Reveal Answers" [ Attrs.class "answer-button" ] ShowAnswers
         ]
 
 
@@ -430,7 +433,7 @@ viewContracts contracts results sampleColoring =
                 noOutput =
                     List.map (\sample -> icon "fas fa-times" (getColor sample)) (noes contract)
             in
-            div
+            button
                 [ Attrs.class "contract", onClick (ContractClicked contract) ]
                 [ text contract
                 , span [] (yesOutput ++ noOutput)
@@ -496,7 +499,7 @@ viewResults results expanded sampleColoring money =
 
 
 viewAnswers answers =
-    section []
+    section [ Attrs.class "answer-overlay" ]
         [ h1 [] [ text "Answers" ]
         , table [ Attrs.class "answer-table" ]
             (List.map
@@ -546,7 +549,7 @@ viewInstructions =
             [ h2 [] [ text "How to play" ]
             , p [] [ text "Click the sample you want to test, then the test you want to perform on it.  The answer will appear in the 'Results' list." ]
             , p [] [ text "Your points are listed at the top of the Results bar.  Right now the game allows negative points, but the goal is to get the ", em [] [ text "most" ], text " points you can!" ]
-            , p [] [ text "When you're ready to check your work, click the 'reveal answers' link." ]
+            , p [] [ text "When you're ready to check your work, click the 'Reveal Answers' button." ]
             , div [ Attrs.class "footer-space" ] []
             ]
         ]
@@ -572,7 +575,7 @@ viewButtons { caption, signal, style } buttons =
 
 viewButton : String -> List (Attribute Msg) -> Msg -> Html Msg
 viewButton txt buttonStyle signal =
-    span (buttonStyle ++ [ onClick signal ]) [ text txt ]
+    button (buttonStyle ++ [ onClick signal ]) [ text txt ]
 
 
 icon class color =
