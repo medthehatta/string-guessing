@@ -29,12 +29,12 @@ main =
 
 init : () -> ( Model, Cmd Msg )
 init () =
-    ( Loading, makeNewGame )
+    ( Loading, makeNewGame defaultBaseApiUrl )
 
 
 resetGame : GameId -> ( Model, Cmd Msg )
 resetGame id =
-    ( Loading, fetchGame id )
+    ( Loading, fetchGame defaultBaseApiUrl id )
 
 
 subscriptions : Model -> Sub Msg
@@ -103,6 +103,7 @@ type alias PlayingGameData =
 type Model
     = PlayingGame PlayingGameData
     | Loading
+    | FallbackLoading
 
 
 type Msg
@@ -211,7 +212,6 @@ update msg model =
             resetGame id
 
         ( NewGameCreated (Err _), _ ) ->
-            -- Do nothing
             ( model, Cmd.none )
 
         ( ShowAnswers, PlayingGame data ) ->
@@ -221,9 +221,13 @@ update msg model =
             ( PlayingGame { data | resultsExpanded = not data.resultsExpanded }, Cmd.none )
 
         ( RequestNewGame, _ ) ->
-            ( Loading, makeNewGame )
+            ( Loading, makeNewGame defaultBaseApiUrl )
 
         ( _, Loading ) ->
+            -- Do nothing
+            ( model, Cmd.none )
+
+        ( _, FallbackLoading ) ->
             -- Do nothing
             ( model, Cmd.none )
 
@@ -321,6 +325,9 @@ view model =
 
         Loading ->
             div [] [ h1 [] [ text "Loading..." ] ]
+
+        FallbackLoading ->
+            div [] [ h1 [] [ text "STILL Loading..." ] ]
 
 
 viewGame : PlayingGameData -> Html Msg
@@ -621,6 +628,10 @@ icon class color =
 -- HTTP
 
 
+defaultBaseApiUrl =
+    "api/games/"
+
+
 fetchConstantGame : Cmd Msg
 fetchConstantGame =
     Http.get
@@ -629,10 +640,10 @@ fetchConstantGame =
         }
 
 
-fetchGame : GameId -> Cmd Msg
-fetchGame id =
+fetchGame : String -> GameId -> Cmd Msg
+fetchGame baseApiUrl id =
     Http.get
-        { url = "http://localhost:8008/games/" ++ id
+        { url = baseApiUrl ++ id
         , expect = Http.expectJson GotGameState constantGameDecoder
         }
 
@@ -646,10 +657,10 @@ constantGameDecoder =
         (D.at [ "contracts" ] (D.dict (D.dict D.bool)))
 
 
-makeNewGame : Cmd Msg
-makeNewGame =
+makeNewGame : String -> Cmd Msg
+makeNewGame baseApiUrl =
     Http.post
-        { url = "http://localhost:8008/games/"
+        { url = baseApiUrl
         , expect = Http.expectJson NewGameCreated newGameCreationDecoder
         , body = Http.jsonBody newGameBody
         }
