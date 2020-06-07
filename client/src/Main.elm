@@ -10,6 +10,7 @@ import Html.Attributes as Attrs
 import Html.Events exposing (onClick, onMouseOut, onMouseOver)
 import Http
 import Json.Decode as D
+import Json.Encode as E
 import Url exposing (Url)
 
 
@@ -28,7 +29,12 @@ main =
 
 init : () -> ( Model, Cmd Msg )
 init () =
-    ( initialModel, fetchGame "treat-alp-ashley" )
+    ( Loading, makeNewGame )
+
+
+resetGame : GameId -> ( Model, Cmd Msg )
+resetGame id =
+    ( Loading, fetchGame id )
 
 
 subscriptions : Model -> Sub Msg
@@ -79,7 +85,7 @@ type alias SetupInterrogator =
     }
 
 
-type alias Model =
+type alias PlayingGameData =
     { tests : List Test
     , samples : List Sample
     , contracts : List Contract
@@ -94,29 +100,21 @@ type alias Model =
     }
 
 
-initialModel =
-    { tests = []
-    , samples = []
-    , contracts = []
-    , answers = []
-    , sampleColoring = Dict.empty
-    , results = []
-    , setup = emptyInterrogator
-    , answersRevealed = False
-    , money = 10
-    , selectedSample = Nothing
-    , resultsExpanded = True
-    }
+type Model
+    = PlayingGame PlayingGameData
+    | Loading
 
 
 type Msg
     = Noop
     | GotGameState (Result Http.Error GameSetup)
+    | NewGameCreated (Result Http.Error GameId)
     | SelectNone
     | SampleClicked Sample
     | TestClicked Test
     | ContractClicked Contract
     | ShowAnswers
+    | RequestNewGame
     | ToggleResults
 
 
@@ -126,96 +124,108 @@ type Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        Noop ->
+    case ( msg, model ) of
+        ( Noop, _ ) ->
             ( model, Cmd.none )
 
-        SampleClicked sample ->
+        ( SampleClicked sample, PlayingGame data ) ->
             let
                 newSample =
-                    pickOrToggle model.selectedSample sample
+                    pickOrToggle data.selectedSample sample
             in
-            ( { model | selectedSample = newSample }, Cmd.none )
+            ( PlayingGame { data | selectedSample = newSample }, Cmd.none )
 
-        SelectNone ->
-            ( { model | selectedSample = Nothing }, Cmd.none )
+        ( SelectNone, PlayingGame data ) ->
+            ( PlayingGame { data | selectedSample = Nothing }, Cmd.none )
 
-        TestClicked test ->
-            case model.selectedSample of
+        ( TestClicked test, PlayingGame data ) ->
+            case data.selectedSample of
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( PlayingGame data, Cmd.none )
 
                 Just sample ->
                     let
                         result =
-                            model.setup.measure sample test
+                            data.setup.measure sample test
 
                         updatedMoney =
-                            model.money - 1
+                            data.money - 1
 
-                        newModel =
-                            if List.length (List.filter (\x -> x == result) model.results) > 0 then
-                                model
+                        newData =
+                            if List.length (List.filter (\x -> x == result) data.results) > 0 then
+                                data
 
-                            else if model.answersRevealed == True then
-                                model
+                            else if data.answersRevealed == True then
+                                data
 
                             else
-                                { model | results = model.results ++ [ result ], money = updatedMoney }
+                                { data | results = data.results ++ [ result ], money = updatedMoney }
                     in
-                    ( newModel, Cmd.none )
+                    ( PlayingGame newData, Cmd.none )
 
-        ContractClicked contract ->
-            case model.selectedSample of
+        ( ContractClicked contract, PlayingGame data ) ->
+            case data.selectedSample of
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( PlayingGame data, Cmd.none )
 
                 Just sample ->
                     let
                         result =
-                            model.setup.tryContract sample contract
+                            data.setup.tryContract sample contract
 
                         updatedMoney =
                             case result of
                                 TestResult _ _ _ ->
-                                    model.money
+                                    data.money
 
                                 ContractResult _ _ success ->
                                     if success == True then
-                                        model.money + 5
+                                        data.money + 5
 
                                     else
-                                        model.money - 5
+                                        data.money - 5
 
-                        newModel =
-                            if List.length (List.filter (\x -> x == result) model.results) > 0 then
-                                model
+                        newData =
+                            if List.length (List.filter (\x -> x == result) data.results) > 0 then
+                                data
 
-                            else if model.answersRevealed == True then
-                                model
+                            else if data.answersRevealed == True then
+                                data
 
                             else
-                                { model
-                                    | results = model.results ++ [ result ]
+                                { data
+                                    | results = data.results ++ [ result ]
                                     , money = updatedMoney
                                 }
                     in
-                    ( newModel, Cmd.none )
+                    ( PlayingGame newData, Cmd.none )
 
-        GotGameState s ->
-            case s of
-                Ok setup ->
-                    ( initializeModel model setup, Cmd.none )
+        ( GotGameState (Ok setup), _ ) ->
+            ( initializeModel setup, Cmd.none )
 
-                Err e ->
-                    -- Do nothing
-                    ( model, Cmd.none )
+        ( GotGameState (Err _), _ ) ->
+            -- Do nothing
+            ( model, Cmd.none )
 
-        ShowAnswers ->
-            ( { model | answersRevealed = True }, Cmd.none )
+        ( NewGameCreated (Ok id), _ ) ->
+            resetGame id
 
-        ToggleResults ->
-            ( { model | resultsExpanded = not model.resultsExpanded }, Cmd.none )
+        ( NewGameCreated (Err _), _ ) ->
+            -- Do nothing
+            ( model, Cmd.none )
+
+        ( ShowAnswers, PlayingGame data ) ->
+            ( PlayingGame { data | answersRevealed = True }, Cmd.none )
+
+        ( ToggleResults, PlayingGame data ) ->
+            ( PlayingGame { data | resultsExpanded = not data.resultsExpanded }, Cmd.none )
+
+        ( RequestNewGame, _ ) ->
+            ( Loading, makeNewGame )
+
+        ( _, Loading ) ->
+            -- Do nothing
+            ( model, Cmd.none )
 
 
 pickOrToggle : Maybe a -> a -> Maybe a
@@ -232,7 +242,7 @@ pickOrToggle match value =
                 Just value
 
 
-initializeModel model setup =
+initializeModel setup =
     let
         { measures, contracts, answers } =
             setup
@@ -284,14 +294,19 @@ initializeModel model setup =
             , getAnswer = getAnswer setup
             }
     in
-    { model
-        | tests = tests
+    PlayingGame
+        { tests = tests
         , samples = samples
         , sampleColoring = sampleColoring
         , contracts = contractNames
         , answers = foundAnswers
         , setup = interrogator
-    }
+        , answersRevealed = False
+        , money = 10
+        , results = []
+        , resultsExpanded = False
+        , selectedSample = Nothing
+        }
 
 
 
@@ -300,6 +315,16 @@ initializeModel model setup =
 
 view : Model -> Html Msg
 view model =
+    case model of
+        PlayingGame subModel ->
+            viewGame subModel
+
+        Loading ->
+            div [] [ h1 [] [ text "Loading..." ] ]
+
+
+viewGame : PlayingGameData -> Html Msg
+viewGame model =
     let
         samplesOrAnswers =
             if model.answersRevealed == True then
@@ -307,11 +332,18 @@ view model =
 
             else
                 viewSamples model.samples model.selectedSample model.sampleColoring
+
+        submitOrNew =
+            if model.answersRevealed == True then
+                viewNewGame model
+
+            else
+                viewSubmit model
     in
     div [] <|
         [ div [ Attrs.class "top-container" ]
             [ samplesOrAnswers
-            , viewSubmit model
+            , submitOrNew
             ]
         , viewTests model.tests
         , viewContracts model.contracts model.results model.sampleColoring
@@ -365,6 +397,12 @@ viewSamples samples selectedSample sampleColoring =
 viewSubmit model =
     div [ Attrs.class "submit-area" ]
         [ viewButton "Reveal Answers" [ Attrs.class "answer-button" ] ShowAnswers
+        ]
+
+
+viewNewGame model =
+    div [ Attrs.class "submit-area" ]
+        [ viewButton "New Game" [ Attrs.class "answer-button" ] RequestNewGame
         ]
 
 
@@ -606,6 +644,30 @@ constantGameDecoder =
         (D.at [ "measures" ] (D.dict (D.dict D.int)))
         (D.at [ "answers" ] (D.dict D.string))
         (D.at [ "contracts" ] (D.dict (D.dict D.bool)))
+
+
+makeNewGame : Cmd Msg
+makeNewGame =
+    Http.post
+        { url = "http://localhost:8008/games/"
+        , expect = Http.expectJson NewGameCreated newGameCreationDecoder
+        , body = Http.jsonBody newGameBody
+        }
+
+
+newGameBody : E.Value
+newGameBody =
+    E.object
+        [ ( "alphabet", E.string "ABCD" )
+        , ( "length", E.int 5 )
+        , ( "samples", E.int 5 )
+        , ( "contracts", E.int 10 )
+        ]
+
+
+newGameCreationDecoder : D.Decoder GameId
+newGameCreationDecoder =
+    D.at [ "data", "subject" ] D.string
 
 
 
