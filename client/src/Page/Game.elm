@@ -26,9 +26,9 @@ main =
         }
 
 
-init : () -> ( Model, Cmd Msg )
-init _ =
-    ( initialModel, fetchConstantGame )
+init : GameId -> ( Model, Cmd Msg )
+init id =
+    ( initialModel, fetchGame id )
 
 
 subscriptions : Model -> Sub Msg
@@ -38,6 +38,10 @@ subscriptions _ =
 
 
 -- TYPES
+
+
+type alias GameId =
+    String
 
 
 type alias Contract =
@@ -583,6 +587,14 @@ fetchConstantGame : Cmd Msg
 fetchConstantGame =
     Http.get
         { url = "game.json"
+        , expect = Http.expectJson GotGameState constantGameDecoder
+        }
+
+
+fetchGame : GameId -> Cmd Msg
+fetchGame id =
+    Http.get
+        { url = "http://localhost:8008/api/" ++ id
         , expect = Http.expectJson GotGameState constantGameDecoder
         }
 

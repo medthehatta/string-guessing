@@ -10,6 +10,7 @@ import Html.Attributes as Attrs
 import Html.Events exposing (onClick, onMouseOut, onMouseOver)
 import Http
 import Json.Decode as D
+import Routing exposing (Route(..))
 import Url exposing (Url)
 
 
@@ -40,16 +41,19 @@ subscriptions _ =
 -- TYPES
 
 
-type alias Model =
-    { nothing : String }
+type Model
+    = DoRoute Route
+    | Initial
 
 
 initialModel =
-    { nothing = "" }
+    Initial
 
 
 type Msg
     = Noop
+    | RequestNewGame
+    | GotNewGame (Result Http.Error String)
 
 
 
@@ -58,7 +62,20 @@ type Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    ( model, Cmd.none )
+    case ( msg, model ) of
+        ( RequestNewGame, _ ) ->
+            ( model, Cmd.none )
+
+        ( GotNewGame result, _ ) ->
+            case result of
+                Ok id ->
+                    ( DoRoute (GoGame id), Cmd.none )
+
+                Err _ ->
+                    ( model, Cmd.none )
+
+        ( _, _ ) ->
+            ( model, Cmd.none )
 
 
 
@@ -67,4 +84,43 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
+    div []
+        [ viewNewGame model
+        , viewDivider model
+        , viewReplayGames model
+        ]
+
+
+viewNewGame model =
+    button [ onClick RequestNewGame ] [ text "New Game" ]
+
+
+viewDivider model =
+    hr [] []
+
+
+viewReplayGames model =
     div [] []
+
+
+
+-- HTTP
+-- Should probably move all API stuff to an API module
+
+
+fetchNewGame : Cmd Msg
+fetchNewGame =
+    Http.post
+        { url = "http://localhost:8008/api/games/"
+        , expect = Http.expectJson GotNewGame newGameDecoder
+        , body = Http.emptyBody
+        }
+
+
+
+-- String is for the GameId.  Share that type properly later
+
+
+newGameDecoder : D.Decoder String
+newGameDecoder =
+    D.at [ "data", "subject" ] D.string

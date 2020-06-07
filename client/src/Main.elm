@@ -12,7 +12,9 @@ import Http
 import Json.Decode as D
 import Page.Game as Game
 import Page.Home as Home
+import Routing exposing (Route(..))
 import Url exposing (Url)
+import Url.Parser as P exposing ((</>), Parser)
 
 
 
@@ -48,6 +50,7 @@ type alias Model =
 type PageModel
     = Game Game.Model
     | Home Home.Model
+    | Loading
 
 
 type Msg
@@ -66,16 +69,13 @@ type Msg
 init : () -> Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
     let
-        initialKey =
-            key
+        initialModel =
+            { key = key, page = Loading }
 
-        ( liftMsg, liftModel, subInit ) =
-            ( GotHomeMsg, Home, Home.init )
-
-        ( subModel, subCmdMsg ) =
-            subInit flags
+        initialMsg =
+            Nav.pushUrl key (Url.toString url)
     in
-    ( { key = key, page = liftModel subModel }, Cmd.map liftMsg subCmdMsg )
+    ( initialModel, initialMsg )
 
 
 
@@ -95,6 +95,14 @@ update msg model =
             in
             updateWith GotGameMsg Game model subUpdate
 
+        ( Route subRoute, _ ) ->
+            case subRoute of
+                GoHome ->
+                    Home.init () |> updateWith GotHomeMsg Home model
+
+                GoGame id ->
+                    Game.init id |> updateWith GotGameMsg Game model
+
         ( UrlRequested urlRequest, _ ) ->
             case urlRequest of
                 Browser.Internal url ->
@@ -104,7 +112,17 @@ update msg model =
                     ( model, Nav.load href )
 
         ( UrlChanged url, _ ) ->
-            ( model, Cmd.none )
+            let
+                maybeGameId =
+                    P.parse (P.s "game" </> P.string) url
+            in
+            case maybeGameId of
+                Nothing ->
+                    Home.init () |> updateWith GotHomeMsg Home model
+
+                Just id ->
+                    Game.init id
+                        |> updateWith GotGameMsg Game model
 
         -- Ignore all other messages
         ( _, _ ) ->
@@ -123,6 +141,11 @@ view model =
 
         Home subModel ->
             Home.view subModel |> viewWith GotHomeMsg
+
+        Loading ->
+            { title = "Loading"
+            , body = [ div [] [ h1 [] [ text "Loading..." ] ] ]
+            }
 
 
 
