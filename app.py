@@ -157,6 +157,12 @@ def post_game():
     return _ok(_regarding(id_, data=game, comment="Game created."))
 
 
+@route("/games/", method="OPTIONS")
+@enable_cors
+def post_game_cors():
+    return "[1]"
+
+
 #
 # Entry point
 #
