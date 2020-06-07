@@ -52,12 +52,33 @@ def _fail(data, reason="(no reason given)"):
 #
 
 
+def enable_cors(fn):
+    def _enable_cors(*args, **kwargs):
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Origin, Accept, Content-Type, X-Requested-With, X-CSRF-Token'
+
+        if request.method != 'OPTIONS':
+            return fn(*args, **kwargs)
+
+    return _enable_cors
+
+
+@route("/cors", method=["GET", "OPTIONS"])
+@enable_cors
+def cors():
+    response.headers['Content-Type'] = "application/json"
+    return "[1]"
+
+
 @route("/")
+@enable_cors
 def index():
     return _ok("Server ok.")
 
 
 @route("/games/", method="GET")
+@enable_cors
 def get_games():
 
     files = [
@@ -79,6 +100,7 @@ def get_games():
 
 
 @route("/games/<id_>", method="GET")
+@enable_cors
 def get_game(id_):
     try:
         with open(os.path.join(GAME_DIR, id_, "game.json")) as f:
@@ -89,6 +111,7 @@ def get_game(id_):
 
 
 @route("/games/<id_>", method="DELETE")
+@enable_cors
 def delete_game(id_):
     path = os.path.join(GAME_DIR, id_)
 
@@ -108,6 +131,7 @@ def delete_game(id_):
 
 
 @route("/games/", method="POST")
+@enable_cors
 def post_game():
     id_ = random_words(3)
 
