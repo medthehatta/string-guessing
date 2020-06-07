@@ -1,6 +1,6 @@
 module Main exposing (..)
 
-import Browser exposing (application)
+import Browser exposing (element)
 import Browser.Navigation as Nav
 import Color exposing (Color)
 import Debug exposing (log)
@@ -10,11 +10,7 @@ import Html.Attributes as Attrs
 import Html.Events exposing (onClick, onMouseOut, onMouseOver)
 import Http
 import Json.Decode as D
-import Page.Game as Game
-import Page.Home as Home
-import Routing exposing (Route(..))
 import Url exposing (Url)
-import Url.Parser as P exposing ((</>), Parser)
 
 
 
@@ -22,14 +18,17 @@ import Url.Parser as P exposing ((</>), Parser)
 
 
 main =
-    application
+    element
         { init = init
         , view = view
         , update = update
         , subscriptions = subscriptions
-        , onUrlRequest = UrlRequested
-        , onUrlChange = UrlChanged
         }
+
+
+init : () -> ( Model, Cmd Msg )
+init () =
+    ( initialModel, fetchGame "treat-alp-ashley" )
 
 
 subscriptions : Model -> Sub Msg
@@ -41,41 +40,84 @@ subscriptions _ =
 -- TYPES
 
 
-type alias Model =
-    { key : Nav.Key
-    , page : PageModel
+type alias GameId =
+    String
+
+
+type alias Contract =
+    String
+
+
+type alias Test =
+    String
+
+
+type alias Sample =
+    String
+
+
+type Answer
+    = Answer Sample String
+
+
+type SampleResult
+    = TestResult Sample Test Int
+    | ContractResult Sample Contract Bool
+
+
+type alias GameSetup =
+    { measures : Dict String (Dict String Int)
+    , contracts : Dict String (Dict String Bool)
+    , answers : Dict String String
     }
 
 
-type PageModel
-    = Game Game.Model
-    | Home Home.Model
-    | Loading
+type alias SetupInterrogator =
+    { measure : Sample -> Test -> SampleResult
+    , tryContract : Sample -> Contract -> SampleResult
+    , getAnswer : Sample -> Answer
+    }
+
+
+type alias Model =
+    { tests : List Test
+    , samples : List Sample
+    , contracts : List Contract
+    , answers : List Answer
+    , setup : SetupInterrogator
+    , sampleColoring : Dict Sample Color
+    , results : List SampleResult
+    , answersRevealed : Bool
+    , money : Int
+    , selectedSample : Maybe Sample
+    , resultsExpanded : Bool
+    }
+
+
+initialModel =
+    { tests = []
+    , samples = []
+    , contracts = []
+    , answers = []
+    , sampleColoring = Dict.empty
+    , results = []
+    , setup = emptyInterrogator
+    , answersRevealed = False
+    , money = 10
+    , selectedSample = Nothing
+    , resultsExpanded = True
+    }
 
 
 type Msg
     = Noop
-    | Trash -- This is just here so our update patterns are not exhaustive
-    | UrlRequested Browser.UrlRequest
-    | UrlChanged Url.Url
-    | GotGameMsg Game.Msg
-    | GotHomeMsg Home.Msg
-
-
-
--- INIT
-
-
-init : () -> Url -> Nav.Key -> ( Model, Cmd Msg )
-init flags url key =
-    let
-        initialModel =
-            { key = key, page = Loading }
-
-        initialMsg =
-            Nav.pushUrl key (Url.toString url)
-    in
-    ( initialModel, initialMsg )
+    | GotGameState (Result Http.Error GameSetup)
+    | SelectNone
+    | SampleClicked Sample
+    | TestClicked Test
+    | ContractClicked Contract
+    | ShowAnswers
+    | ToggleResults
 
 
 
@@ -84,79 +126,534 @@ init flags url key =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case ( msg, model.page ) of
-        ( Noop, _ ) ->
+    case msg of
+        Noop ->
             ( model, Cmd.none )
 
-        ( GotGameMsg subMsg, Game subModel ) ->
+        SampleClicked sample ->
             let
-                subUpdate =
-                    Game.update subMsg subModel
+                newSample =
+                    pickOrToggle model.selectedSample sample
             in
-            updateWith GotGameMsg Game model subUpdate
+            ( { model | selectedSample = newSample }, Cmd.none )
 
-        ( Route subRoute, _ ) ->
-            case subRoute of
-                GoHome ->
-                    Home.init () |> updateWith GotHomeMsg Home model
+        SelectNone ->
+            ( { model | selectedSample = Nothing }, Cmd.none )
 
-                GoGame id ->
-                    Game.init id |> updateWith GotGameMsg Game model
-
-        ( UrlRequested urlRequest, _ ) ->
-            case urlRequest of
-                Browser.Internal url ->
-                    ( model, Nav.pushUrl model.key (Url.toString url) )
-
-                Browser.External href ->
-                    ( model, Nav.load href )
-
-        ( UrlChanged url, _ ) ->
-            let
-                maybeGameId =
-                    P.parse (P.s "game" </> P.string) url
-            in
-            case maybeGameId of
+        TestClicked test ->
+            case model.selectedSample of
                 Nothing ->
-                    Home.init () |> updateWith GotHomeMsg Home model
+                    ( model, Cmd.none )
 
-                Just id ->
-                    Game.init id
-                        |> updateWith GotGameMsg Game model
+                Just sample ->
+                    let
+                        result =
+                            model.setup.measure sample test
 
-        -- Ignore all other messages
-        ( _, _ ) ->
-            ( model, Cmd.none )
+                        updatedMoney =
+                            model.money - 1
+
+                        newModel =
+                            if List.length (List.filter (\x -> x == result) model.results) > 0 then
+                                model
+
+                            else if model.answersRevealed == True then
+                                model
+
+                            else
+                                { model | results = model.results ++ [ result ], money = updatedMoney }
+                    in
+                    ( newModel, Cmd.none )
+
+        ContractClicked contract ->
+            case model.selectedSample of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just sample ->
+                    let
+                        result =
+                            model.setup.tryContract sample contract
+
+                        updatedMoney =
+                            case result of
+                                TestResult _ _ _ ->
+                                    model.money
+
+                                ContractResult _ _ success ->
+                                    if success == True then
+                                        model.money + 5
+
+                                    else
+                                        model.money - 5
+
+                        newModel =
+                            if List.length (List.filter (\x -> x == result) model.results) > 0 then
+                                model
+
+                            else if model.answersRevealed == True then
+                                model
+
+                            else
+                                { model
+                                    | results = model.results ++ [ result ]
+                                    , money = updatedMoney
+                                }
+                    in
+                    ( newModel, Cmd.none )
+
+        GotGameState s ->
+            case s of
+                Ok setup ->
+                    ( initializeModel model setup, Cmd.none )
+
+                Err e ->
+                    -- Do nothing
+                    ( model, Cmd.none )
+
+        ShowAnswers ->
+            ( { model | answersRevealed = True }, Cmd.none )
+
+        ToggleResults ->
+            ( { model | resultsExpanded = not model.resultsExpanded }, Cmd.none )
+
+
+pickOrToggle : Maybe a -> a -> Maybe a
+pickOrToggle match value =
+    case match of
+        Nothing ->
+            Just value
+
+        Just match_ ->
+            if match_ == value then
+                Nothing
+
+            else
+                Just value
+
+
+initializeModel model setup =
+    let
+        { measures, contracts, answers } =
+            setup
+
+        samples : List Sample
+        samples =
+            Dict.keys measures
+
+        tests : List Test
+        tests =
+            Dict.values measures
+                |> List.head
+                |> Maybe.withDefault Dict.empty
+                |> Dict.keys
+
+        foundAnswers : List Answer
+        foundAnswers =
+            List.map
+                (\( sample, answer ) -> Answer sample answer)
+                (Dict.toList answers)
+
+        contractNames : List Contract
+        contractNames =
+            List.map Dict.keys (Dict.values contracts)
+                |> List.head
+                |> Maybe.withDefault []
+
+        okColors =
+            [ Color.red
+            , Color.brown
+            , Color.green
+            , Color.blue
+            , Color.purple
+            , Color.orange
+            ]
+
+        sampleColoring : Dict Sample Color
+        sampleColoring =
+            Dict.fromList <|
+                List.map2
+                    Tuple.pair
+                    samples
+                    okColors
+
+        interrogator : SetupInterrogator
+        interrogator =
+            { measure = measure setup
+            , tryContract = tryContract setup
+            , getAnswer = getAnswer setup
+            }
+    in
+    { model
+        | tests = tests
+        , samples = samples
+        , sampleColoring = sampleColoring
+        , contracts = contractNames
+        , answers = foundAnswers
+        , setup = interrogator
+    }
 
 
 
 -- VIEW
 
 
-view : Model -> Browser.Document Msg
+view : Model -> Html Msg
 view model =
-    case model.page of
-        Game subModel ->
-            Game.view subModel |> viewWith GotGameMsg
+    let
+        samplesOrAnswers =
+            if model.answersRevealed == True then
+                viewAnswers model.answers model.sampleColoring
 
-        Home subModel ->
-            Home.view subModel |> viewWith GotHomeMsg
+            else
+                viewSamples model.samples model.selectedSample model.sampleColoring
+    in
+    div [] <|
+        [ div [ Attrs.class "top-container" ]
+            [ samplesOrAnswers
+            , viewSubmit model
+            ]
+        , viewTests model.tests
+        , viewContracts model.contracts model.results model.sampleColoring
+        , viewResults model.results model.resultsExpanded model.sampleColoring model.money
+        ]
+            ++ [ viewInstructions ]
 
-        Loading ->
-            { title = "Loading"
-            , body = [ div [] [ h1 [] [ text "Loading..." ] ] ]
+
+colorForSample sampleColoring sample =
+    Dict.get sample sampleColoring |> Maybe.withDefault Color.black
+
+
+bgColor : Color -> Attribute Msg
+bgColor color =
+    Attrs.style "background" (Color.toCssString color)
+
+
+fgColor : Color -> Attribute Msg
+fgColor color =
+    Attrs.style "color" (Color.toCssString color)
+
+
+viewSamples samples selectedSample sampleColoring =
+    let
+        getColor : Sample -> Color
+        getColor =
+            colorForSample sampleColoring
+    in
+    section []
+        [ h1 [] [ text "Samples" ]
+        , viewButtons
+            { caption = \x -> x
+            , signal = \x -> SampleClicked x
+            , style =
+                \x ->
+                    case selectedSample of
+                        Nothing ->
+                            [ Attrs.class "button", bgColor (getColor x) ]
+
+                        Just selectedSample_ ->
+                            if x == selectedSample_ then
+                                [ Attrs.class "button", Attrs.class "bordered", bgColor (getColor x) ]
+
+                            else
+                                [ Attrs.class "button", bgColor (getColor x) ]
             }
+            samples
+        ]
+
+
+viewSubmit model =
+    div [ Attrs.class "submit-area" ]
+        [ viewButton "Reveal Answers" [ Attrs.class "answer-button" ] ShowAnswers
+        ]
+
+
+viewTests tests =
+    section []
+        [ h1 [] [ text "Tests" ]
+        , viewButtons
+            { caption = \x -> x
+            , signal = \x -> TestClicked x
+            , style = \_ -> [ Attrs.class "button" ]
+            }
+            tests
+        ]
+
+
+viewContracts contracts results sampleColoring =
+    let
+        getColor : Sample -> Color
+        getColor =
+            colorForSample sampleColoring
+
+        yesses contract =
+            List.filterMap
+                (\res ->
+                    case res of
+                        ContractResult sample contract_ val ->
+                            if val == True && contract == contract_ then
+                                Just sample
+
+                            else
+                                Nothing
+
+                        _ ->
+                            Nothing
+                )
+                results
+
+        noes contract =
+            List.filterMap
+                (\res ->
+                    case res of
+                        ContractResult sample contract_ val ->
+                            if val == False && contract == contract_ then
+                                Just sample
+
+                            else
+                                Nothing
+
+                        _ ->
+                            Nothing
+                )
+                results
+
+        viewContract contract =
+            let
+                yesOutput =
+                    List.map (\sample -> icon "fas fa-check" (getColor sample)) (yesses contract)
+
+                noOutput =
+                    List.map (\sample -> icon "fas fa-times" (getColor sample)) (noes contract)
+            in
+            button
+                [ Attrs.class "contract", onClick (ContractClicked contract) ]
+                [ text contract
+                , span [] (yesOutput ++ noOutput)
+                ]
+    in
+    section []
+        [ h1 [] [ text "Contracts" ]
+        , div [] (List.map viewContract contracts)
+        ]
+
+
+viewResults results expanded sampleColoring money =
+    let
+        getColor =
+            colorForSample sampleColoring
+
+        resultStyle sample =
+            [ Attrs.class "outer", getColor sample |> fgColor ]
+
+        viewResult : SampleResult -> Html Msg
+        viewResult res =
+            case res of
+                TestResult sample test num ->
+                    li
+                        (resultStyle sample)
+                        [ text (sample ++ " " ++ test ++ " = " ++ String.fromInt num) ]
+
+                ContractResult sample contract p ->
+                    let
+                        truth =
+                            if p == True then
+                                "YES"
+
+                            else
+                                "NO"
+                    in
+                    li
+                        (resultStyle sample ++ [ Attrs.style "font-weight" "bold" ])
+                        [ text
+                            (String.join " " [ sample, contract, "=", truth ])
+                        ]
+
+        exStyle =
+            if expanded == True then
+                { arrowClass = "fas fa-angle-down"
+                , disp = Attrs.style "display" "block"
+                }
+
+            else
+                { arrowClass = "fas fa-angle-up"
+                , disp = Attrs.style "display" "none"
+                }
+    in
+    div [ Attrs.class "footer" ]
+        [ h1
+            [ onClick ToggleResults ]
+            [ icon exStyle.arrowClass Color.black
+            , span [] [ text ("Results" ++ " (points: " ++ String.fromInt money ++ ")") ]
+            ]
+        , div [ Attrs.class "scroller-outer" ]
+            [ ol [ exStyle.disp, Attrs.class "scroller-inner" ]
+                (List.map viewResult results)
+            ]
+        ]
+
+
+viewAnswers answers sampleColoring =
+    let
+        getColor : Sample -> Color
+        getColor =
+            colorForSample sampleColoring
+
+        viewAnswer (Answer sample answer) =
+            button
+                [ bgColor (getColor sample)
+                , Attrs.class "answer-sample"
+                ]
+                [ text sample, span [] [ text answer ] ]
+    in
+    section []
+        [ h1 [] [ text "Answers" ]
+        , div [] (List.map viewAnswer answers)
+        ]
+
+
+viewInstructions =
+    section []
+        [ hr [] []
+        , h1 [] [ text "Instructions" ]
+        , div []
+            [ h2 [] [ text "Goal" ]
+            , p [] [ text "Get the most points you can by guessing the composition of the 'samples' and completing contracts." ]
+            ]
+        , div []
+            [ h2 [] [ text "Samples" ]
+            , p [] [ text "The samples are each secret 5-letter strings made of A, B, C, and D." ]
+            ]
+        , div []
+            [ h2 [] [ text "Tests" ]
+            , p [] [ text "Tests tell you information about samples.  Generally they tell you the number of times a certain substring appears." ]
+            , p [] [ text "Each test costs one point to run, so try to use as few tests as possible!" ]
+            , ul []
+                [ li [] [ b [] [ text "A - " ], text "Number of times A appears at any position in the sample.  (E.G. C = 2 means there are 2 C's in the sample)" ]
+                , li [] [ b [] [ text "AA - " ], text "Number of times A appears twice in a row.  (E.G. AA = 1 for 'AABBB', AA = 2 for 'AAABB')" ]
+                , li [] [ b [] [ text "AB - " ], text "Number of times AB appears in that order anywhere in the sample  (E.G. CD is in the samples 'ACDCB' and 'CDDDD', but not 'DCBBB' or 'CCCBD')" ]
+                , li [] [ b [] [ text "AAA.. - " ], text "Number of A's present in the first 3 positions of the string" ]
+                , li [] [ b [] [ text ".AAA. - " ], text "Number of A's present in the central 3 positions of the string" ]
+                , li [] [ b [] [ text "..AAA - " ], text "Number of A's present in the final 3 positions of the string" ]
+                , li [] [ b [] [ text "A.A.A - " ], text "Number of A's present in the 3 string positions indicated" ]
+                , li [] [ text "(Other tests with periods are similar: periods represent 'anything', and the letters mark places where the letter is being counted)" ]
+                ]
+            ]
+        , div []
+            [ h2 [] [ text "Contracts" ]
+            , p [] [ text "Contracts are like tests, but instead of telling you information about a sample, you put a sample on a contract if you know it satisfies the conditions of the contract." ]
+            , p [] [ text "Contracts look like tests, but they have comparisons in them.  " ]
+            , p [] [ text "For example, ", b [] [ text "AAA..=3" ], text " is a contract that requires a sample where there are exactly 3 As at the beginning of the string" ]
+            , p [] [ text "Contracts ", em [] [ text "make" ], text " you 5 points if you satisfy the contract, but if you're incorrect they ", em [] [ text "cost" ], text " you 5 points!  So try to avoid submitting samples for contracts unless you are pretty sure!" ]
+            ]
+        , div []
+            [ h2 [] [ text "How to play" ]
+            , p [] [ text "Click the sample you want to test, then the test you want to perform on it.  The answer will appear in the 'Results' list." ]
+            , p [] [ text "Your points are listed at the top of the Results bar.  Right now the game allows negative points, but the goal is to get the ", em [] [ text "most" ], text " points you can!" ]
+            , p [] [ text "When you're ready to check your work, click the 'Reveal Answers' button." ]
+            , div [ Attrs.class "footer-space" ] []
+            ]
+        ]
+
+
+viewButtons : { caption : a -> String, signal : a -> Msg, style : a -> List (Attribute Msg) } -> List a -> Html Msg
+viewButtons { caption, signal, style } buttons =
+    div [ Attrs.class "section" ]
+        (List.map
+            (\x -> viewButton (caption x) (style x) (signal x))
+            buttons
+        )
+
+
+viewButtonContainer : List (Html Msg) -> List (Attribute Msg) -> Msg -> Html Msg
+viewButtonContainer content buttonStyle signal =
+    button (buttonStyle ++ [ onClick signal ]) content
+
+
+viewButton : String -> List (Attribute Msg) -> Msg -> Html Msg
+viewButton txt buttonStyle signal =
+    viewButtonContainer [ text txt ] buttonStyle signal
+
+
+icon class color =
+    i [ Attrs.class class, fgColor color, Attrs.alt "" ] []
 
 
 
--- Lift pages into the main app
+-- HTTP
 
 
-updateWith : (msg -> Msg) -> (model -> PageModel) -> Model -> ( model, Cmd msg ) -> ( Model, Cmd Msg )
-updateWith liftMsg liftModel model ( preModel, preMsg ) =
-    ( { model | page = liftModel preModel }, Cmd.map liftMsg preMsg )
+fetchConstantGame : Cmd Msg
+fetchConstantGame =
+    Http.get
+        { url = "game.json"
+        , expect = Http.expectJson GotGameState constantGameDecoder
+        }
 
 
-viewWith : (msg -> Msg) -> Html msg -> Browser.Document Msg
-viewWith liftMsg subDoc =
-    { title = "Strings", body = [ Html.map liftMsg subDoc ] }
+fetchGame : GameId -> Cmd Msg
+fetchGame id =
+    Http.get
+        { url = "http://localhost:8008/games/" ++ id
+        , expect = Http.expectJson GotGameState constantGameDecoder
+        }
+
+
+constantGameDecoder : D.Decoder GameSetup
+constantGameDecoder =
+    D.map3
+        (\x y z -> { measures = x, answers = y, contracts = z })
+        (D.at [ "measures" ] (D.dict (D.dict D.int)))
+        (D.at [ "answers" ] (D.dict D.string))
+        (D.at [ "contracts" ] (D.dict (D.dict D.bool)))
+
+
+
+-- HIDING API DICTS
+
+
+measure : GameSetup -> Sample -> Test -> SampleResult
+measure setup sample test =
+    TestResult
+        sample
+        test
+        (Dict.get sample setup.measures
+            |> Maybe.andThen (Dict.get test)
+            |> Maybe.withDefault 0
+        )
+
+
+tryContract : GameSetup -> Sample -> Contract -> SampleResult
+tryContract setup sample contract =
+    ContractResult
+        sample
+        contract
+        (Dict.get sample setup.contracts
+            |> Maybe.andThen (Dict.get contract)
+            |> Maybe.withDefault False
+        )
+
+
+getAnswer : GameSetup -> Sample -> Answer
+getAnswer setup sample =
+    Answer
+        sample
+        (Dict.get sample setup.answers
+            |> Maybe.withDefault "(unknown)"
+        )
+
+
+emptyGameSetup : GameSetup
+emptyGameSetup =
+    { measures = Dict.empty
+    , contracts = Dict.empty
+    , answers = Dict.empty
+    }
+
+
+emptyInterrogator : SetupInterrogator
+emptyInterrogator =
+    { measure = measure emptyGameSetup
+    , tryContract = tryContract emptyGameSetup
+    , getAnswer = getAnswer emptyGameSetup
+    }
