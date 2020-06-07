@@ -107,17 +107,44 @@ class GameDefinition:
         return partition(self.num_contracts, self.contract_generator())
 
     def paired_contracts_samples(self):
-        def _adjust(cs):
+        def _adjust_cs(cs):
             (contracts, samples) = cs
             contracts_fixed = fix_contract_set(contracts, samples, self.make_contract,)
             samples_fixed = fix_sample_set(samples, contracts_fixed, self.make_sample,)
             return (contracts_fixed, samples_fixed)
 
+        def _adjust_c(c):
+            contracts = c[:]
+            n = len(contracts)
+            upper_triangle = flatten_list([
+                [(contracts[i], contracts[j]) for j in range(i+1, n)]
+                for i in range(n)
+            ])
+            independence = [
+                (c1, c2, self.contract_similarity(c1, c2))
+                for (c1, c2) in upper_triangle
+            ]
+            not_good = flatten_list([
+                [c1, c2] for (c1, c2, sim) in independence if sim > 0.7
+            ])
+            offending = Counter(not_good)
+            to_remove = offending.most_common(1)
+            if to_remove:
+                contracts.remove(to_remove[0][0])
+                contracts.append(self.make_contract())
+            return contracts
+
+        def _adjust_both(cs):
+            (new_contracts, new_samples) = _adjust_cs(cs)
+            newer_contracts = _adjust_c(new_contracts)
+            return (newer_contracts, new_samples)
+
         initial_contract_set = next(self.contract_set_generator())
         initial_sample_set = next(self.sample_set_generator())
 
         return iterate_until_stable(
-            _adjust, (initial_contract_set, initial_sample_set),
+            _adjust_both,
+            (initial_contract_set, initial_sample_set),
         )
 
     def available_callables(self):
@@ -182,8 +209,7 @@ class GameDefinition:
                 selected.append(callable_)
         return selected
 
-    def contract_similarity(self, contract1, contract2):
-        num_samples = 1000
+    def contract_similarity(self, contract1, contract2, num_samples=1000):
         random_samples = take(num_samples, self.sample_generator())
         counts = Counter(contract1(s) is contract2(s) for s in random_samples)
         return counts.get(True, 0) / num_samples
