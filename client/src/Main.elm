@@ -308,7 +308,7 @@ initializeModel setup =
         , answersRevealed = False
         , money = 10
         , results = []
-        , resultsExpanded = False
+        , resultsExpanded = True
         , selectedSample = Nothing
         }
 
