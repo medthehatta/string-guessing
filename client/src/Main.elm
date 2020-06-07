@@ -100,8 +100,13 @@ type alias PlayingGameData =
     }
 
 
+type alias SelectingGameData =
+    { nothing : String }
+
+
 type Model
     = PlayingGame PlayingGameData
+    | SelectingGame SelectingGameData
     | Loading
     | FallbackLoading
 
@@ -127,6 +132,10 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model ) of
         ( Noop, _ ) ->
+            ( model, Cmd.none )
+
+        -- TODO
+        ( _, SelectingGame data ) ->
             ( model, Cmd.none )
 
         ( SampleClicked sample, PlayingGame data ) ->
@@ -323,6 +332,9 @@ view model =
         PlayingGame subModel ->
             viewGame subModel
 
+        SelectingGame subModel ->
+            viewSelection subModel
+
         Loading ->
             div [] [ h1 [] [ text "Loading..." ] ]
 
@@ -357,6 +369,11 @@ viewGame model =
         , viewResults model.results model.resultsExpanded model.sampleColoring model.money
         ]
             ++ [ viewInstructions ]
+
+
+viewSelection : SelectingGameData -> Html Msg
+viewSelection model =
+    div [] []
 
 
 colorForSample sampleColoring sample =
