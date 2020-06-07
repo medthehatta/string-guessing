@@ -163,6 +163,52 @@ def post_game_cors():
     return "[1]"
 
 
+@route("/scores/", method="GET")
+@enable_cors
+def get_scores():
+    try:
+        with open(os.path.join(GAME_DIR, "scores.log"), "r") as f:
+            lines = f.readlines()
+        lexed = (
+            line.strip().split(" ", 1) for line in lines
+            if line.strip()
+        )
+        best = {}
+        for (a, b) in lexed:
+            best[a] = max(best.get(a, [0]) + [int(b)])
+        result = list(sorted(best.items(), key=lambda x: x[1], reverse=True))
+        return _ok(_regarding("scores", data=result))
+
+    except OSError:
+        response.status = 500
+        return _fail(
+            _regarding("scores"),
+            reason="Failed to retrieve the scores.",
+        )
+
+
+@route("/scores/<id_>", method="POST")
+@enable_cors
+def post_score(id_):
+    try:
+        body = json.load(request.body)
+    except json.JSONDecodeError:
+        body = {"score": 0}
+
+    score = body.get("score", 0)
+
+    try:
+        with open(os.path.join(GAME_DIR, "scores.log"), "a") as f:
+            f.write(f"{id_} {score}\n")
+        return _ok(_regarding(id_, data={"score": score}))
+    except OSError:
+        response.status = 500
+        return _fail(
+            {"id": id_, "score": score},
+            reason="Failed to save the score for this game.",
+        )
+
+
 #
 # Entry point
 #
