@@ -500,12 +500,13 @@ viewSamples samples selectedSample sampleColoring =
 viewSubmit model =
     div [ Attrs.class "submit-area" ]
         [ viewButton "Reveal Answers" [ Attrs.class "answer-button" ] ShowAnswers
+        , viewButton "Abandon" [ Attrs.class "abandon-button" ] GoHome
         ]
 
 
 viewNewGame model =
     div [ Attrs.class "submit-area" ]
-        [ viewButton "New Game" [ Attrs.class "answer-button" ] GoHome
+        [ viewButton "Go Home" [ Attrs.class "answer-button" ] GoHome
         ]
 
 

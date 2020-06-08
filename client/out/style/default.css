@@ -32,6 +32,26 @@ section {
     border: none;
 }
 
+.abandon-button {
+    align-items: center;
+    justify-content: center;
+    width: 150px;
+    height: 150px;
+    line-height: 30px;
+    float: left;
+    background: pink;
+    margin: 2px;
+    text-align: center;
+    text-decoration: none;
+    font-weight: bold;
+    font-family: sans;
+    font-size: 24px;
+    -webkit-touch-callout: none;
+    user-select: none;
+    color: black;
+    border: none;
+}
+
 .answer-sample {
     display: flex;
     flex-direction: column;
@@ -108,7 +128,7 @@ section {
 .new-button {
     align-items: center;
     justify-content: center;
-    width: 100%;
+    width: 90%;
     height: 150px;
     line-height: 30px;
     float: left;
@@ -220,7 +240,10 @@ section {
 }
 
 .submit-area {
+    display: flex;
+    flex-direction: row;
     margin-top: 60px;
+    width: 600px;
 }
 
 .scroller-inner {
