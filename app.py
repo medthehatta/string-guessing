@@ -166,8 +166,11 @@ def post_game_cors():
 @route("/scores/", method="GET")
 @enable_cors
 def get_scores():
+    path = os.path.join(GAME_DIR, "scores.log")
+    if not os.path.isfile(path):
+        open(path, "a").close()
     try:
-        with open(os.path.join(GAME_DIR, "scores.log"), "r") as f:
+        with open(path, "r") as f:
             lines = f.readlines()
         lexed = (
             line.strip().split(" ", 1) for line in lines

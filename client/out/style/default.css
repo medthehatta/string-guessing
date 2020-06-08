@@ -81,13 +81,33 @@ section {
     float: left;
     clear: both;
     list-style-type: none;
-    width: 400px;
+    width: 100%;
+}
+
+.select-hrline {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    align-items: center;
+    text-align: center;
+}
+
+.select-hrline hr {
+    width: 15%;
+}
+
+.selection-container {
+    display: flex;
+    flex-direction: column;
+    width: 600px;
+    align-items: center;
+    text-align: center;
 }
 
 .new-button {
     align-items: center;
     justify-content: center;
-    width: 400px;
+    width: 100%;
     height: 150px;
     line-height: 30px;
     float: left;

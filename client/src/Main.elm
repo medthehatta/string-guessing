@@ -378,7 +378,7 @@ view model =
             viewSelection subModel
 
         Loading ->
-            div [] [ h1 [] [ text "Loading..." ] ]
+            div [] [ h1 [] [ text "Loading (Med didn't optimize, so this might be a few seconds)..." ] ]
 
         FallbackLoading ->
             div [] [ h1 [] [ text "STILL Loading..." ] ]
@@ -435,10 +435,18 @@ viewSelection model =
                     )
                     scoreList
                 )
+
+        hrLine =
+            div [ Attrs.class "select-hrline" ]
+                [ hr [] []
+                , span [] [ text "or, select a game below with a high score to beat " ]
+                , hr [] []
+                ]
     in
-    div []
-        [ viewButton "New Game" [ Attrs.class "new-button" ] RequestNewGame
-        , hr [] []
+    div [ Attrs.class "selection-container" ]
+        [ h1 [] [ text "Stringy Prototype" ]
+        , viewButton "New Game" [ Attrs.class "new-button" ] RequestNewGame
+        , hrLine
         , viewGamesWithScores
         ]
 
