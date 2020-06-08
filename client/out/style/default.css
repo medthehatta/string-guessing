@@ -74,6 +74,36 @@ section {
     border: none;
 }
 
+.score-listing {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    float: left;
+    clear: both;
+    list-style-type: none;
+    width: 400px;
+}
+
+.new-button {
+    align-items: center;
+    justify-content: center;
+    width: 400px;
+    height: 150px;
+    line-height: 30px;
+    float: left;
+    background: green;
+    margin: 2px;
+    text-align: center;
+    text-decoration: none;
+    font-weight: bold;
+    font-family: sans;
+    font-size: 24px;
+    -webkit-touch-callout: none;
+    user-select: none;
+    color: black;
+    border: none;
+}
+
 .answer-table {
     font-size: 24px;
     font-family: sans;
