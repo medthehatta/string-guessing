@@ -131,6 +131,7 @@ type Msg
     | RequestNewGame
     | ToggleResults
     | ReplayGame GameId
+    | GoHome
 
 
 
@@ -262,6 +263,9 @@ update msg model =
 
         ( ReplayGame id, _ ) ->
             resetGame id
+
+        ( GoHome, _ ) ->
+            ( Loading, fetchScores )
 
         ( _, Loading ) ->
             -- Do nothing
@@ -433,7 +437,7 @@ viewSelection model =
                 )
     in
     div []
-        [ viewButton "New Game" [ Attrs.class "answer-button" ] RequestNewGame
+        [ viewButton "New Game" [ Attrs.class "new-button" ] RequestNewGame
         , hr [] []
         , viewGamesWithScores
         ]
@@ -489,7 +493,7 @@ viewSubmit model =
 
 viewNewGame model =
     div [ Attrs.class "submit-area" ]
-        [ viewButton "New Game" [ Attrs.class "answer-button" ] RequestNewGame
+        [ viewButton "New Game" [ Attrs.class "answer-button" ] GoHome
         ]
 
 
