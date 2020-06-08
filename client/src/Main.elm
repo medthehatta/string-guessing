@@ -296,6 +296,10 @@ pickOrToggle match value =
                 Just value
 
 
+initialMoney =
+    10
+
+
 initializeModel gameId setup =
     let
         { measures, contracts, answers } =
@@ -357,7 +361,7 @@ initializeModel gameId setup =
         , answers = foundAnswers
         , setup = interrogator
         , answersRevealed = False
-        , money = 10
+        , money = initialMoney
         , results = []
         , resultsExpanded = True
         , selectedSample = Nothing
@@ -420,7 +424,7 @@ viewSelection : SelectingGameData -> Html Msg
 viewSelection model =
     let
         scoreList =
-            Dict.toList model.scores
+            List.filter (\( x, y ) -> y > initialMoney) (Dict.toList model.scores)
 
         viewGamesWithScores =
             ul [ Attrs.class "score-listing" ]
