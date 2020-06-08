@@ -52,6 +52,13 @@ section {
     border: none;
 }
 
+.samples-area {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 500px;
+}
+
 .answer-sample {
     display: flex;
     flex-direction: column;

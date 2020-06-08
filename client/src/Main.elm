@@ -477,23 +477,25 @@ viewSamples samples selectedSample sampleColoring =
     in
     section []
         [ h1 [] [ text "Samples" ]
-        , viewButtons
-            { caption = \x -> x
-            , signal = \x -> SampleClicked x
-            , style =
-                \x ->
-                    case selectedSample of
-                        Nothing ->
-                            [ Attrs.class "button", bgColor (getColor x) ]
-
-                        Just selectedSample_ ->
-                            if x == selectedSample_ then
-                                [ Attrs.class "button", Attrs.class "bordered", bgColor (getColor x) ]
-
-                            else
+        , div [ Attrs.class "samples-area" ]
+            [ viewButtons
+                { caption = \x -> x
+                , signal = \x -> SampleClicked x
+                , style =
+                    \x ->
+                        case selectedSample of
+                            Nothing ->
                                 [ Attrs.class "button", bgColor (getColor x) ]
-            }
-            samples
+
+                            Just selectedSample_ ->
+                                if x == selectedSample_ then
+                                    [ Attrs.class "button", Attrs.class "bordered", bgColor (getColor x) ]
+
+                                else
+                                    [ Attrs.class "button", bgColor (getColor x) ]
+                }
+                samples
+            ]
         ]
 
 
