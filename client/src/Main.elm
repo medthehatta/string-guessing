@@ -29,12 +29,12 @@ main =
 
 init : () -> ( Model, Cmd Msg )
 init () =
-    ( Loading, makeNewGame defaultBaseApiUrl )
+    ( Loading, fetchScores )
 
 
 resetGame : GameId -> ( Model, Cmd Msg )
 resetGame id =
-    ( Loading, fetchGame defaultBaseApiUrl id )
+    ( Loading, fetchGame id )
 
 
 subscriptions : Model -> Sub Msg
@@ -86,7 +86,8 @@ type alias SetupInterrogator =
 
 
 type alias PlayingGameData =
-    { tests : List Test
+    { gameId : GameId
+    , tests : List Test
     , samples : List Sample
     , contracts : List Contract
     , answers : List Answer
@@ -101,7 +102,11 @@ type alias PlayingGameData =
 
 
 type alias SelectingGameData =
-    { nothing : String }
+    { scores : ScoreState }
+
+
+type alias ScoreState =
+    Dict GameId Int
 
 
 type Model
@@ -109,12 +114,15 @@ type Model
     | SelectingGame SelectingGameData
     | Loading
     | FallbackLoading
+    | ErrorPrint String
 
 
 type Msg
     = Noop
-    | GotGameState (Result Http.Error GameSetup)
+    | GotGameState GameId (Result Http.Error GameSetup)
     | NewGameCreated (Result Http.Error GameId)
+    | GotScoreState (Result Http.Error ScoreState)
+    | SavedScore (Result Http.Error ())
     | SelectNone
     | SampleClicked Sample
     | TestClicked Test
@@ -122,6 +130,7 @@ type Msg
     | ShowAnswers
     | RequestNewGame
     | ToggleResults
+    | ReplayGame GameId
 
 
 
@@ -132,10 +141,6 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model ) of
         ( Noop, _ ) ->
-            ( model, Cmd.none )
-
-        -- TODO
-        ( _, SelectingGame data ) ->
             ( model, Cmd.none )
 
         ( SampleClicked sample, PlayingGame data ) ->
@@ -210,10 +215,20 @@ update msg model =
                     in
                     ( PlayingGame newData, Cmd.none )
 
-        ( GotGameState (Ok setup), _ ) ->
-            ( initializeModel setup, Cmd.none )
+        ( GotGameState id (Ok setup), _ ) ->
+            ( initializeModel id setup, Cmd.none )
 
-        ( GotGameState (Err _), _ ) ->
+        ( GotGameState _ (Err _), _ ) ->
+            -- Do nothing
+            ( model, Cmd.none )
+
+        ( GotScoreState (Ok state), _ ) ->
+            ( SelectingGame { scores = state }, Cmd.none )
+
+        ( GotScoreState (Err (Http.BadBody s)), _ ) ->
+            ( ErrorPrint s, Cmd.none )
+
+        ( GotScoreState (Err _), _ ) ->
             -- Do nothing
             ( model, Cmd.none )
 
@@ -223,14 +238,30 @@ update msg model =
         ( NewGameCreated (Err _), _ ) ->
             ( model, Cmd.none )
 
+        ( SavedScore (Ok _), _ ) ->
+            ( model, Cmd.none )
+
+        ( SavedScore (Err _), _ ) ->
+            ( model, Cmd.none )
+
         ( ShowAnswers, PlayingGame data ) ->
-            ( PlayingGame { data | answersRevealed = True }, Cmd.none )
+            let
+                score =
+                    data.money
+
+                id =
+                    data.gameId
+            in
+            ( PlayingGame { data | answersRevealed = True }, saveScore id score )
 
         ( ToggleResults, PlayingGame data ) ->
             ( PlayingGame { data | resultsExpanded = not data.resultsExpanded }, Cmd.none )
 
         ( RequestNewGame, _ ) ->
-            ( Loading, makeNewGame defaultBaseApiUrl )
+            ( Loading, makeNewGame )
+
+        ( ReplayGame id, _ ) ->
+            resetGame id
 
         ( _, Loading ) ->
             -- Do nothing
@@ -238,6 +269,12 @@ update msg model =
 
         ( _, FallbackLoading ) ->
             -- Do nothing
+            ( model, Cmd.none )
+
+        ( _, ErrorPrint _ ) ->
+            ( model, Cmd.none )
+
+        ( _, SelectingGame _ ) ->
             ( model, Cmd.none )
 
 
@@ -255,7 +292,7 @@ pickOrToggle match value =
                 Just value
 
 
-initializeModel setup =
+initializeModel gameId setup =
     let
         { measures, contracts, answers } =
             setup
@@ -308,7 +345,8 @@ initializeModel setup =
             }
     in
     PlayingGame
-        { tests = tests
+        { gameId = gameId
+        , tests = tests
         , samples = samples
         , sampleColoring = sampleColoring
         , contracts = contractNames
@@ -340,6 +378,9 @@ view model =
 
         FallbackLoading ->
             div [] [ h1 [] [ text "STILL Loading..." ] ]
+
+        ErrorPrint s ->
+            div [] [ h1 [] [ text s ] ]
 
 
 viewGame : PlayingGameData -> Html Msg
@@ -373,7 +414,29 @@ viewGame model =
 
 viewSelection : SelectingGameData -> Html Msg
 viewSelection model =
-    div [] []
+    let
+        scoreList =
+            Dict.toList model.scores
+
+        viewGamesWithScores =
+            ul [ Attrs.class "score-listing" ]
+                (List.map
+                    (\( x, y ) ->
+                        li []
+                            [ viewButton
+                                (String.fromInt y)
+                                [ Attrs.class "button" ]
+                                (ReplayGame x)
+                            ]
+                    )
+                    scoreList
+                )
+    in
+    div []
+        [ viewButton "New Game" [ Attrs.class "answer-button" ] RequestNewGame
+        , hr [] []
+        , viewGamesWithScores
+        ]
 
 
 colorForSample sampleColoring sample =
@@ -646,22 +709,30 @@ icon class color =
 
 
 defaultBaseApiUrl =
-    "api/games/"
+    "api/"
+
+
+defaultGameApiUrl =
+    defaultBaseApiUrl ++ "games/"
+
+
+defaultScoreApiUrl =
+    defaultBaseApiUrl ++ "scores/"
 
 
 fetchConstantGame : Cmd Msg
 fetchConstantGame =
     Http.get
         { url = "game.json"
-        , expect = Http.expectJson GotGameState constantGameDecoder
+        , expect = Http.expectJson (GotGameState "null") constantGameDecoder
         }
 
 
-fetchGame : String -> GameId -> Cmd Msg
-fetchGame baseApiUrl id =
+fetchGame : GameId -> Cmd Msg
+fetchGame id =
     Http.get
-        { url = baseApiUrl ++ id
-        , expect = Http.expectJson GotGameState constantGameDecoder
+        { url = defaultGameApiUrl ++ id
+        , expect = Http.expectJson (GotGameState id) constantGameDecoder
         }
 
 
@@ -674,12 +745,21 @@ constantGameDecoder =
         (D.at [ "contracts" ] (D.dict (D.dict D.bool)))
 
 
-makeNewGame : String -> Cmd Msg
-makeNewGame baseApiUrl =
+makeNewGame : Cmd Msg
+makeNewGame =
     Http.post
-        { url = baseApiUrl
+        { url = defaultGameApiUrl
         , expect = Http.expectJson NewGameCreated newGameCreationDecoder
         , body = Http.jsonBody newGameBody
+        }
+
+
+saveScore : GameId -> Int -> Cmd Msg
+saveScore id score =
+    Http.post
+        { url = defaultScoreApiUrl ++ id
+        , expect = Http.expectWhatever SavedScore
+        , body = Http.jsonBody (E.object [ ( "score", E.int score ) ])
         }
 
 
@@ -696,6 +776,19 @@ newGameBody =
 newGameCreationDecoder : D.Decoder GameId
 newGameCreationDecoder =
     D.at [ "data", "subject" ] D.string
+
+
+fetchScores : Cmd Msg
+fetchScores =
+    Http.get
+        { url = defaultScoreApiUrl
+        , expect = Http.expectJson GotScoreState scoreStateDecoder
+        }
+
+
+scoreStateDecoder : D.Decoder ScoreState
+scoreStateDecoder =
+    D.at [ "data", "data" ] (D.dict D.int)
 
 
 
