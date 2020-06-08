@@ -175,9 +175,10 @@ def get_scores():
         )
         best = {}
         for (a, b) in lexed:
-            best[a] = max(best.get(a, [0]) + [int(b)])
-        result = list(sorted(best.items(), key=lambda x: x[1], reverse=True))
-        return _ok(_regarding("scores", data=result))
+            best[a] = max(best.get(a, 0), int(b))
+        results = list(sorted(best.items(), key=lambda x: x[1], reverse=True))
+        ret = {a: b for (a, b) in results}
+        return _ok(_regarding("scores", data=ret))
 
     except OSError:
         response.status = 500
