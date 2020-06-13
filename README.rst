@@ -1,13 +1,9 @@
-Elm with FastAPI
-================
+String Guessing
+===============
 
-Small starter repo for doing simple Elm apps with python FastAPI backends.
-
-Elm: https://elm-lang.org
-
-FastAPI: https://fastapi.tiangolo.com
+Prototype bits for an engine-building deduction game.
 
 Maintainer
 ----------
 
-Med Mahmoud <medthehatta@gmail.com>
+Med <medthehatta@gmail.com>

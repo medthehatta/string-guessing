@@ -1,8 +1,0 @@
-diceware
-click
-cytoolz
-flake8
-pylint
-pytest
-black
-isort
