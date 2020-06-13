@@ -6,6 +6,7 @@
 import json
 import os
 import shutil
+import uuid
 
 from bottle import default_app
 from bottle import route
@@ -14,7 +15,6 @@ from bottle import request
 from bottle import response
 
 from string_guessing import game_json
-from string_guessing import random_words
 
 
 #
@@ -133,7 +133,7 @@ def delete_game(id_):
 @route("/games/", method="POST")
 @enable_cors
 def post_game():
-    id_ = random_words(3)
+    id_ = str(uuid.uuid1())
 
     try:
         body = json.load(request.body)
