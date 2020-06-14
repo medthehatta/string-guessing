@@ -5,7 +5,7 @@ services:
     build: ./client
     depends_on: [backend]
     ports:
-      - "80"
+      - "8001:80"
       - "443"
 
   backend:
