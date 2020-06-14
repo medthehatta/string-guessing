@@ -794,7 +794,7 @@ newGameBody =
 
 newGameCreationDecoder : D.Decoder GameId
 newGameCreationDecoder =
-    D.at [ "data", "subject" ] D.string
+    D.at [ "id" ] D.string
 
 
 fetchScores : Cmd Msg
@@ -807,7 +807,7 @@ fetchScores =
 
 scoreStateDecoder : D.Decoder ScoreState
 scoreStateDecoder =
-    D.at [ "data", "data" ] (D.dict D.int)
+    D.dict D.int
 
 
 
